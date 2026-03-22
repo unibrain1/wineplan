@@ -3,13 +3,16 @@ services:
     build: .
     container_name: wine-planner
     ports:
-      - "8080:80"
+      - "8089:80"
     env_file:
       - .env
     environment:
       - SYNC_SCHEDULE=0 2 * * *
     volumes:
       - ./site:/app/site
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
 
   run-now:
@@ -19,6 +22,9 @@ services:
       - .env
     volumes:
       - ./site:/app/site
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     entrypoint: []
     command: ["bash", "/app/fetch_docker.sh"]
     profiles:
