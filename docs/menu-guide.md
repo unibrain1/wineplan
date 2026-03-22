@@ -22,6 +22,44 @@ The engine scans both title and description, so you can be brief.
 - **Cooking method helps**: "Braised short ribs" and "Grilled steak" both match on both the protein and the method
 - **Multiple keywords stack**: "Grilled lamb" matches both "grilled" (bold red or rosé) and "lamb" (bold red) — reinforcing the suggestion
 
+## Output Format
+
+The pipeline produces `data/menu.json` — a JSON array of menu entries sorted by date. Each entry has:
+
+| Field | Type | Description |
+|---|---|---|
+| `date` | string | ISO date of the meal (e.g., `"2026-03-22"`) |
+| `meal` | string | Calendar event title — the recipe name |
+| `description` | string | Calendar event description (often just `"Dinner"`) |
+| `keywords` | string[] | Auto-extracted food keywords used for wine pairing |
+
+Example:
+
+```json
+[
+  {
+    "date": "2026-03-17",
+    "meal": "Slow-Cooker Corned Beef and Cabbage (Irish Boiled Dinner), Apple Pie",
+    "description": "Dinner",
+    "keywords": ["beef", "corned beef"]
+  },
+  {
+    "date": "2026-03-22",
+    "meal": "Mexican Rotisserie Chicken, Feta Lime Coleslaw",
+    "description": "Dinner",
+    "keywords": ["beans", "chicken", "mexican"]
+  },
+  {
+    "date": "2026-03-25",
+    "meal": "Cast Iron Pan Pizza",
+    "description": "Dinner",
+    "keywords": ["pizza"]
+  }
+]
+```
+
+The more descriptive the meal title, the more keywords get extracted and the better the pairing recommendations.
+
 ## How Pairing Works
 
 1. The pipeline extracts food keywords from your calendar events

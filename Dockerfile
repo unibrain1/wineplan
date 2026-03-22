@@ -3,15 +3,18 @@ FROM python:3.12-slim AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install nginx, curl, jq, cron, and 1Password CLI
+# Install system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx curl jq gnupg cron \
-    && curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
-       gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg \
-    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/amd64 stable main" \
-       > /etc/apt/sources.list.d/1password.list \
-    && apt-get update && apt-get install -y --no-install-recommends 1password-cli \
+    nginx curl jq cron unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install 1Password CLI (multi-arch: works on both amd64 and arm64)
+RUN ARCH=$(dpkg --print-architecture) \
+    && curl -sSfL "https://cache.agilebits.com/dist/1P/op2/pkg/v2.30.3/op_linux_${ARCH}_v2.30.3.zip" \
+       -o /tmp/op.zip \
+    && unzip -o /tmp/op.zip -d /usr/local/bin/ op \
+    && rm /tmp/op.zip \
+    && chmod +x /usr/local/bin/op
 
 # Install Python dependencies
 COPY requirements.txt /app/requirements.txt

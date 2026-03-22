@@ -23,3 +23,6 @@ __pycache__/
 
 # Sample files
 sample.html
+
+# Generated site artifacts
+site/report.json

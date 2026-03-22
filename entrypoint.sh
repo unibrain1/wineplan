@@ -3,6 +3,9 @@ set -euo pipefail
 
 echo "==> Starting wine plan service..."
 
+# Always copy the plan to web root so nginx has something to serve
+cp -r /app/site/* /usr/share/nginx/html/
+
 # Run the pipeline once at startup
 echo "==> Running initial sync..."
 bash /app/fetch_docker.sh || echo "WARNING: Initial sync failed, serving stale plan"

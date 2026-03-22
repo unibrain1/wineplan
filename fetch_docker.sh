@@ -2,9 +2,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-set -a
-source .env
-set +a
+# In Docker, env vars come from docker-compose env_file.
+# Locally, source .env if it exists.
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
 
 source pipeline.sh
 

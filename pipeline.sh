@@ -39,6 +39,9 @@ python3 scripts/compare.py data/inventory.json data/plan.json > data/report.json
 echo "==> Generating pairing suggestions..."
 python3 scripts/pairing.py data/menu.json data/plan.json data/inventory.json > data/pairing_suggestions.json
 
+echo "==> Validating plan against inventory..."
+python3 scripts/validate_plan.py data/inventory.json site/index.html
+
 echo "==> Injecting pairings into site..."
 python3 scripts/inject_pairings.py data/pairing_suggestions.json site/index.html
 cp data/report.json site/report.json

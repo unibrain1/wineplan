@@ -95,9 +95,17 @@ Runs the pipeline at startup and nightly at 2 AM. Serves the plan at `http://<ho
 
 ## CellarTracker Integration
 
+- **CellarTracker is the system of record for all wine metadata.** Type, badge, varietal, appellation, scores, drinking windows — all come from CellarTracker, never inferred or guessed by the LLM.
 - Export API endpoint: `https://www.cellartracker.com/xlquery.asp` with query params `User`, `Password`, `Table=Inventory`, `Format=tab`, `Location=1`.
 - Returns tab-delimited text (one row per physical bottle). Key fields: Vintage, Wine, Varietal, Type, Country, Region, SubRegion, Appellation, iWine, Quantity (derived by counting rows per iWine), Location, Bin, Size, BeginConsume, EndConsume, CT, MY.
+- `validate_plan.py` runs each pipeline cycle to cross-reference plan badges against CellarTracker's `Type` field and auto-correct mismatches.
 - **Credentials must never be written to any file.** They are resolved at runtime from 1Password via `op read` using secret references in `.env`.
+
+## LLM vs Data Boundary
+
+- **CellarTracker provides:** wine metadata (Type/badge, Varietal, Appellation, scores, drinking windows, quantity)
+- **The LLM provides:** scheduling decisions (which bottle in which week, seasonal fit, urgency ordering, pairing suggestions)
+- The LLM must never invent or override wine metadata. If a field is available in inventory.json, use it.
 
 ## Important Conventions
 

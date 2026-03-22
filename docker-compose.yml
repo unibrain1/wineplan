@@ -1,8 +1,19 @@
 services:
-  wine-plan:
+  wine-planner:
     build: .
+    container_name: wine-planner
     ports:
       - "8080:80"
     env_file:
       - .env
     restart: unless-stopped
+
+  run-now:
+    build: .
+    container_name: wine-planner-run
+    env_file:
+      - .env
+    entrypoint: []
+    command: ["bash", "/app/fetch_docker.sh"]
+    profiles:
+      - run-now
