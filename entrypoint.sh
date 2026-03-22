@@ -4,6 +4,7 @@ set -euo pipefail
 echo "==> Starting wine plan service..."
 
 # Self-update from git
+git config --global --add safe.directory /app
 echo "==> Pulling latest from git..."
 git -C /app pull --ff-only 2>&1 || echo "WARNING: git pull failed — running with current version"
 
