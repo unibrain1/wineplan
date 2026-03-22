@@ -9,7 +9,7 @@ echo "==> Pulling latest from git..."
 git -C /app pull --ff-only 2>&1 || echo "WARNING: git pull failed — running with current version"
 
 # Install/update Python dependencies if requirements changed
-pip install --no-cache-dir -q -r /app/requirements.txt 2>&1 || true
+pip install --no-cache-dir --root-user-action=ignore -q -r /app/requirements.txt 2>&1 || true
 
 # Link nginx config from the repo
 ln -sf /app/nginx.conf /etc/nginx/sites-available/default
@@ -18,14 +18,14 @@ ln -sf /app/nginx.conf /etc/nginx/sites-available/default
 mkdir -p /app/data
 
 # Start nginx first so the site is available immediately
-echo "==> Starting web server on port 80..."
+echo "==> Starting web server on port 8080..."
 nginx
 
-# Set up periodic sync (default: 2:00 AM daily, configurable via SYNC_SCHEDULE env var)
+# Set up periodic sync with supercronic (runs as non-root)
 SCHEDULE="${SYNC_SCHEDULE:-0 2 * * *}"
-echo "${SCHEDULE} cd /app && bash fetch_docker.sh >> /proc/1/fd/1 2>&1" | crontab -
+echo "${SCHEDULE} cd /app && bash fetch_docker.sh" > /tmp/crontab
 echo "    Scheduled sync: ${SCHEDULE}"
-service cron start
+supercronic /tmp/crontab &
 
 # Run the pipeline once (site is already serving)
 echo "==> Running initial sync..."

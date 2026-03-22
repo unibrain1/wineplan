@@ -2,6 +2,7 @@ services:
   wine-planner:
     build: .
     container_name: wine-planner
+    user: "1000:1000"
     env_file:
       - .env
     environment:
@@ -16,16 +17,17 @@ services:
       traefik.http.routers.wine-planner.entrypoints: https
       traefik.http.routers.wine-planner.rule: Host(`wine-planner.unibrain.org`)
       traefik.http.routers.wine-planner.tls: 'true'
-      traefik.http.services.wine-planner.loadbalancer.server.port: '80'
+      traefik.http.services.wine-planner.loadbalancer.server.port: '8080'
     networks:
       - traefik_proxy
     ports:
-      - "8089:80"
+      - "8089:8080"
     restart: unless-stopped
 
   run-now:
     build: .
     container_name: wine-planner-run
+    user: "1000:1000"
     env_file:
       - .env
     volumes:

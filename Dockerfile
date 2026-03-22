@@ -5,7 +5,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install system packages + Node.js for Claude Code CLI + git for self-updating
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx curl jq cron unzip nodejs npm git \
+    nginx curl jq unzip nodejs npm git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI
@@ -20,15 +20,28 @@ RUN ARCH=$(dpkg --print-architecture) \
     && rm /tmp/op.zip \
     && chmod +x /usr/local/bin/op
 
+# Install supercronic (cron for non-root containers)
+RUN ARCH=$(dpkg --print-architecture) \
+    && curl -sSfL "https://github.com/aptible/supercronic/releases/download/v0.2.33/supercronic-linux-${ARCH}" \
+       -o /usr/local/bin/supercronic \
+    && chmod +x /usr/local/bin/supercronic
+
 # Install Python dependencies (copied separately for layer caching)
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
+RUN pip install --no-cache-dir --root-user-action=ignore -r /tmp/requirements.txt && rm /tmp/requirements.txt
+
+# Create ansible user (matches host UID/GID)
+RUN groupadd -g 1000 ansible && useradd -u 1000 -g 1000 -m ansible
+
+# Configure nginx to run as non-root
+RUN sed -i 's/user www-data;/user ansible;/' /etc/nginx/nginx.conf \
+    && mkdir -p /var/log/nginx /var/lib/nginx/body /run \
+    && chown -R ansible:ansible /var/log/nginx /var/lib/nginx /run /etc/nginx
 
 WORKDIR /app
 
-# Repo is mounted at /app via docker-compose volume
-# nginx.conf is symlinked at startup from the mounted repo
+USER ansible
 
-EXPOSE 80
+EXPOSE 8080
 
 ENTRYPOINT ["/app/entrypoint.sh"]
