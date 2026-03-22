@@ -3,9 +3,9 @@ FROM python:3.12-slim AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install system packages + Node.js for Claude Code CLI
+# Install system packages + Node.js for Claude Code CLI + git for self-updating
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx curl jq cron unzip nodejs npm \
+    nginx curl jq cron unzip nodejs npm git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI
@@ -20,19 +20,14 @@ RUN ARCH=$(dpkg --print-architecture) \
     && rm /tmp/op.zip \
     && chmod +x /usr/local/bin/op
 
-# Install Python dependencies
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-# Copy application code
-COPY scripts/ /app/scripts/
-COPY site/ /app/site/
-COPY pipeline.sh fetch_docker.sh entrypoint.sh /app/
-COPY nginx.conf /etc/nginx/sites-available/default
+# Install Python dependencies (copied separately for layer caching)
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 WORKDIR /app
 
-RUN mkdir -p /app/data && chmod +x /app/entrypoint.sh /app/fetch_docker.sh /app/pipeline.sh
+# Repo is mounted at /app via docker-compose volume
+# nginx.conf is symlinked at startup from the mounted repo
 
 EXPOSE 80
 

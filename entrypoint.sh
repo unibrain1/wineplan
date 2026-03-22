@@ -3,7 +3,20 @@ set -euo pipefail
 
 echo "==> Starting wine plan service..."
 
-# Start nginx first so the site is available immediately (serves from /app/site via volume mount)
+# Self-update from git
+echo "==> Pulling latest from git..."
+git -C /app pull --ff-only 2>&1 || echo "WARNING: git pull failed — running with current version"
+
+# Install/update Python dependencies if requirements changed
+pip install --no-cache-dir -q -r /app/requirements.txt 2>&1 || true
+
+# Link nginx config from the repo
+ln -sf /app/nginx.conf /etc/nginx/sites-available/default
+
+# Ensure data directory exists
+mkdir -p /app/data
+
+# Start nginx first so the site is available immediately
 echo "==> Starting web server on port 80..."
 nginx
 
@@ -17,6 +30,5 @@ service cron start
 echo "==> Running initial sync..."
 bash /app/fetch_docker.sh || echo "WARNING: Initial sync failed, serving stale plan"
 
-# Keep the container running (nginx is already running as daemon)
 echo "==> Ready."
 tail -f /dev/null

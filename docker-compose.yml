@@ -2,17 +2,25 @@ services:
   wine-planner:
     build: .
     container_name: wine-planner
-    ports:
-      - "8089:80"
     env_file:
       - .env
     environment:
       - SYNC_SCHEDULE=0 2 * * *
     volumes:
-      - ./site:/app/site
+      - ./:/app
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    labels:
+      traefik.enable: 'true'
+      traefik.http.routers.wine-planner.entrypoints: https
+      traefik.http.routers.wine-planner.rule: Host(`wine-planner.unibrain.org`)
+      traefik.http.routers.wine-planner.tls: 'true'
+      traefik.http.services.wine-planner.loadbalancer.server.port: '80'
+    networks:
+      - traefik_proxy
+    ports:
+      - "8089:80"
     restart: unless-stopped
 
   run-now:
@@ -21,11 +29,17 @@ services:
     env_file:
       - .env
     volumes:
-      - ./site:/app/site
+      - ./:/app
     dns:
       - 8.8.8.8
       - 8.8.4.4
     entrypoint: []
     command: ["bash", "/app/fetch_docker.sh"]
+    networks:
+      - traefik_proxy
     profiles:
       - run-now
+
+networks:
+  traefik_proxy:
+    external: true

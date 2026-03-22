@@ -5,6 +5,12 @@ set -euo pipefail
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# --- SELF-UPDATE ---
+if [ -d .git ]; then
+  log "==> Pulling latest from git..."
+  git pull --ff-only 2>&1 || log "WARNING: git pull failed — running with current version"
+fi
+
 # --- FETCH (scripted) ---
 log "==> Resolving credentials from 1Password..."
 CT_USERNAME=$(op read "$USERNAME") || { log "ERROR: Failed to resolve CellarTracker username from 1Password"; exit 1; }
