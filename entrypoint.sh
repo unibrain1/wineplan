@@ -10,8 +10,10 @@ cp -r /app/site/* /usr/share/nginx/html/
 echo "==> Running initial sync..."
 bash /app/fetch_docker.sh || echo "WARNING: Initial sync failed, serving stale plan"
 
-# Set up nightly cron (2:00 AM)
-echo "0 2 * * * cd /app && bash fetch_docker.sh >> /var/log/wine-sync.log 2>&1" | crontab -
+# Set up periodic sync (default: 2:00 AM daily, configurable via SYNC_SCHEDULE env var)
+SCHEDULE="${SYNC_SCHEDULE:-0 2 * * *}"
+echo "${SCHEDULE} cd /app && bash fetch_docker.sh >> /var/log/wine-sync.log 2>&1" | crontab -
+echo "    Scheduled sync: ${SCHEDULE}"
 
 # Start cron daemon in background
 service cron start
