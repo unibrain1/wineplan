@@ -50,27 +50,29 @@ PID_MENU=$!
 wait $PID_INV || { log "ERROR: Inventory parse failed"; exit 1; }
 wait $PID_MENU || { log "ERROR: Menu parse failed"; exit 1; }
 
-# --- GENERATE PLAN (scripted — rules-based) ---
+# --- GENERATE PLAN to staging (scripted — rules-based) ---
+# Build new plan in data/ first, only publish to site/ when complete with notes
 log "==> Generating plan..."
-python3 scripts/generate_plan.py data/inventory.json site/plan.json || { log "ERROR: Plan generation failed"; exit 1; }
+python3 scripts/generate_plan.py data/inventory.json data/plan.json || { log "ERROR: Plan generation failed"; exit 1; }
 
 # --- GENERATE NOTES (LLM — Claude Code CLI, augmented with CT notes) ---
 if command -v claude &> /dev/null; then
   log "==> Generating tasting notes (Claude)..."
-  python3 scripts/generate_notes.py site/plan.json data/notes.tsv data/foodtags.tsv || log "WARNING: Note generation failed — plan will have empty notes"
+  python3 scripts/generate_notes.py data/plan.json data/notes.tsv data/foodtags.tsv || log "WARNING: Note generation failed — plan will have empty notes"
 else
   log "    Skipping note generation — claude CLI not available"
 fi
 
 # --- COMPARE & PAIR (scripted) ---
 log "==> Comparing inventory vs plan..."
-python3 scripts/compare.py data/inventory.json site/plan.json > data/report.json || { log "ERROR: Compare failed"; exit 1; }
+python3 scripts/compare.py data/inventory.json data/plan.json > data/report.json || { log "ERROR: Compare failed"; exit 1; }
 
 log "==> Generating pairing suggestions..."
-python3 scripts/pairing.py data/menu.json site/plan.json data/inventory.json > data/pairing_suggestions.json || { log "ERROR: Pairing failed"; exit 1; }
+python3 scripts/pairing.py data/menu.json data/plan.json data/inventory.json > data/pairing_suggestions.json || { log "ERROR: Pairing failed"; exit 1; }
 
-# --- PUBLISH (scripted) ---
+# --- PUBLISH atomically (site always has a complete plan with notes) ---
 log "==> Publishing to site/..."
+cp data/plan.json site/plan.json
 cp data/pairing_suggestions.json site/pairing_suggestions.json
 cp data/report.json site/report.json
 

@@ -963,13 +963,14 @@ def main() -> None:
 
     inventory: list[dict] = json.loads(inventory_path.read_text(encoding="utf-8"))
 
-    # Load previous plan for changelog diffing
+    # Load previous plan for changelog diffing (from the live site plan)
+    live_plan_path = Path("site/plan.json")
     old_weeks: list[dict] | None = None
-    if plan_path.exists():
+    if live_plan_path.exists():
         try:
-            old_data = json.loads(plan_path.read_text(encoding="utf-8"))
+            old_data = json.loads(live_plan_path.read_text(encoding="utf-8"))
             old_weeks = old_data.get("allWeeks")
-            # Back up before overwriting
+            # Back up the live plan
             previous_path.parent.mkdir(parents=True, exist_ok=True)
             previous_path.write_text(
                 json.dumps(old_data, indent=2, ensure_ascii=False),
