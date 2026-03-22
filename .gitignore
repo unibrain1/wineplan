@@ -25,4 +25,6 @@ __pycache__/
 sample.html
 
 # Generated site artifacts
+site/plan.json
+site/pairing_suggestions.json
 site/report.json

@@ -64,7 +64,7 @@ These rules govern how bottles are scheduled. Update this section if the criteri
 - One bottle per week
 - Weeks begin on Monday
 - Starting week: Monday of the current week
-- Two-year rolling horizon
+- One-year rolling horizon (52 weeks)
 
 ### People & Context
 
@@ -118,7 +118,7 @@ Do not schedule these unless `EndConsume` is within 2 years or explicitly reques
 ### Output
 
 - Write to `site/plan.json` (not `site/index.html`)
-- Include `allWeeks` array (104 entries), `quarterInfo` object, and `changelog` object
+- Include `allWeeks` array (52 entries), `quarterInfo` object, and `changelog` object
 - Update the `changelog` with changes made in this sync
 - All wine metadata (badge, varietal, appellation, scores, windows) from inventory.json
 - Do not write credentials to any file

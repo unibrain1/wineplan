@@ -3,10 +3,14 @@ FROM python:3.12-slim AS base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install system packages
+# Install system packages + Node.js for Claude Code CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx curl jq cron unzip \
+    nginx curl jq cron unzip nodejs npm \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI
+# hadolint ignore=DL3016
+RUN npm install -g @anthropic-ai/claude-code
 
 # Install 1Password CLI (multi-arch: works on both amd64 and arm64)
 RUN ARCH=$(dpkg --print-architecture) \

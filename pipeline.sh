@@ -4,6 +4,7 @@
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# --- FETCH (scripted) ---
 log "==> Resolving credentials from 1Password..."
 CT_USERNAME=$(op read "$USERNAME") || { log "ERROR: Failed to resolve CellarTracker username from 1Password"; exit 1; }
 CT_PASSWORD=$(op read "$PASSWORD") || { log "ERROR: Failed to resolve CellarTracker password from 1Password"; exit 1; }
@@ -22,6 +23,7 @@ wait $PID_CAL || { log "ERROR: Google Calendar fetch failed — check GOOGLE_CAL
 LINES=$(wc -l < data/inventory.tsv | tr -d ' ')
 log "    Downloaded $((LINES - 1)) bottles + menu calendar"
 
+# --- PARSE (scripted) ---
 log "==> Parsing inventory and menu..."
 python3 scripts/parse_inventory.py data/inventory.tsv > data/inventory.json &
 PID_INV=$!
@@ -32,15 +34,26 @@ PID_MENU=$!
 wait $PID_INV || { log "ERROR: Inventory parse failed"; exit 1; }
 wait $PID_MENU || { log "ERROR: Menu parse failed"; exit 1; }
 
+# --- GENERATE PLAN (scripted — rules-based) ---
+log "==> Generating plan..."
+python3 scripts/generate_plan.py data/inventory.json site/plan.json || { log "ERROR: Plan generation failed"; exit 1; }
+
+# --- GENERATE NOTES (LLM — Claude Code CLI) ---
+if command -v claude &> /dev/null; then
+  log "==> Generating tasting notes (Claude)..."
+  python3 scripts/generate_notes.py site/plan.json || log "WARNING: Note generation failed — plan will have empty notes"
+else
+  log "    Skipping note generation — claude CLI not available"
+fi
+
+# --- COMPARE & PAIR (scripted) ---
 log "==> Comparing inventory vs plan..."
 python3 scripts/compare.py data/inventory.json site/plan.json > data/report.json || { log "ERROR: Compare failed"; exit 1; }
 
 log "==> Generating pairing suggestions..."
 python3 scripts/pairing.py data/menu.json site/plan.json data/inventory.json > data/pairing_suggestions.json || { log "ERROR: Pairing failed"; exit 1; }
 
-log "==> Validating plan against inventory..."
-python3 scripts/validate_plan.py data/inventory.json site/plan.json || { log "ERROR: Validation failed"; exit 1; }
-
+# --- PUBLISH (scripted) ---
 log "==> Publishing to site/..."
 cp data/pairing_suggestions.json site/pairing_suggestions.json
 cp data/report.json site/report.json
