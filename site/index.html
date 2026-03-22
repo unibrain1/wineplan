@@ -15,10 +15,10 @@
   <div class="header-sub">52-week plan &nbsp;&middot;&nbsp; One bottle per week &nbsp;&middot;&nbsp; March 2026 &ndash; March 2027</div>
   <div class="header-updated">Last updated: March 22, 2026</div>
   <div class="stats">
-    <div class="stat"><span class="stat-num">104</span><span class="stat-lbl">Bottles Planned</span></div>
-    <div class="stat"><span class="stat-num">15</span><span class="stat-lbl">Urgent / Past Peak</span></div>
-    <div class="stat"><span class="stat-num">6</span><span class="stat-lbl">Evolution Tastings</span></div>
-    <div class="stat"><span class="stat-num">~118</span><span class="stat-lbl">Remaining After Yr 2</span></div>
+    <div class="stat"><span class="stat-num" id="stat-planned">—</span><span class="stat-lbl">Bottles Planned</span></div>
+    <div class="stat"><span class="stat-num" id="stat-urgent">—</span><span class="stat-lbl">Urgent / Past Peak</span></div>
+    <div class="stat"><span class="stat-num" id="stat-evolution">—</span><span class="stat-lbl">Evolution Tastings</span></div>
+    <div class="stat"><span class="stat-num" id="stat-pairings">—</span><span class="stat-lbl">Menu Pairings</span></div>
   </div>
 </header>
 
@@ -391,6 +391,10 @@ Promise.all([
   quarterInfo = planData.quarterInfo;
   changelog   = planData.changelog;
   pairingSuggestions = (results[1] && results[1].suggestions) || [];
+  document.getElementById('stat-planned').textContent   = allWeeks.length;
+  document.getElementById('stat-urgent').textContent    = allWeeks.filter(function(w){ return w.urgent === true; }).length;
+  document.getElementById('stat-evolution').textContent = allWeeks.filter(function(w){ return w.evolution === true; }).length;
+  document.getElementById('stat-pairings').textContent  = pairingSuggestions.filter(function(s){ return s.pairing; }).length;
   populateLegend();
   renderPlan();
 });

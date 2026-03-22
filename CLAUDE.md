@@ -47,7 +47,6 @@ scripts/
   parse_menu.py               — menu.ics → menu.json (Google Calendar .ics feed)
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
-  validate_plan.py            — Cross-references plan badges against CellarTracker Type
 docs/
   fetch.md                    — Plan criteria and rules reference
   menu-guide.md               — How to write menu entries for best pairing results

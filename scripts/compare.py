@@ -10,12 +10,11 @@ Output: report.json to stdout with four sections:
 """
 
 import json
-import re
 import sys
 from datetime import date
 from pathlib import Path
 
-CURRENT_YEAR = date.today().year
+from wine_utils import CURRENT_YEAR, normalize
 
 # Common abbreviations used in the plan vs full names in CellarTracker
 ALIASES = {
@@ -31,15 +30,6 @@ ALIASES = {
     "adamant": "adamant cellars",
     "dion": "dion vineyard",
 }
-
-
-def normalize(name):
-    """Lowercase, strip punctuation, collapse whitespace."""
-    s = name.lower()
-    s = re.sub(r"[''`]", "", s)  # curly quotes
-    s = s.replace("è", "e").replace("é", "e").replace("ñ", "n")
-    s = re.sub(r"[^a-z0-9\s]", " ", s)
-    return re.sub(r"\s+", " ", s).strip()
 
 
 def expand_aliases(name_norm):

@@ -18,9 +18,9 @@ This does everything deterministically (pipeline logic lives in `pipeline.sh`):
 2. Resolves CellarTracker credentials via `op read`
 3. Fetches inventory + menu calendar in parallel → `data/inventory.tsv`, `data/menu.ics`
 4. Parses inventory + menu in parallel → `data/inventory.json`, `data/menu.json`
-5. Compares inventory vs `site/plan.json` → `data/report.json`
-6. Generates pairing suggestions → `data/pairing_suggestions.json`
-7. Validates plan badges against CellarTracker Type field (auto-corrects `site/plan.json`)
+5. Generates plan (badges assigned directly from CellarTracker Type) → `site/plan.json`
+6. Compares inventory vs `site/plan.json` → `data/report.json`
+7. Generates pairing suggestions → `data/pairing_suggestions.json`
 8. Copies `pairing_suggestions.json` and `report.json` to `site/`
 
 Do not ask for credentials — they come from 1Password via `.env`. Do not write resolved credentials to any file.

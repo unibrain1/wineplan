@@ -50,12 +50,16 @@ Wines:
 
 def call_claude(prompt: str) -> str:
     """Call Claude CLI with a prompt and return the response."""
-    result = subprocess.run(
-        ["claude", "--print", "--model", "haiku", prompt],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        result = subprocess.run(
+            ["claude", "--print", "--model", "haiku", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        print("WARNING: Claude CLI timed out", file=sys.stderr)
+        return ""
     if result.returncode != 0:
         print(
             f"WARNING: Claude CLI returned {result.returncode}: {result.stderr}",

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic wine plan generator.
 
-Reads inventory.json and produces site/plan.json with allWeeks (104 entries),
+Reads inventory.json and produces site/plan.json with allWeeks (52 entries),
 quarterInfo, and changelog.  A backup of the previous plan is saved to
 data/plan_previous.json before overwriting.
 
@@ -10,32 +10,17 @@ Usage:
 """
 
 import json
-import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
+
+from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-CURRENT_YEAR = date.today().year
-
 TOTAL_WEEKS = 52
-
-# TYPE_TO_BADGE — matches validate_plan.py exactly so generated badges are
-# always valid without a subsequent validation pass.
-TYPE_TO_BADGE: dict[str, str] = {
-    "Red": "red",
-    "White": "white",
-    "Rosé": "rose",
-    "Sparkling": "sparkling",
-    "Sparkling - White": "sparkling",
-    "White - Sparkling": "sparkling",
-    "Sparkling - Rosé": "sparkling",
-    "White - Sweet/Dessert": "white",
-    "Red - Sweet/Dessert": "red",
-}
 
 # Wines that must hold ≥ 2 bottles back (schedule at most qty - 2, min 1).
 # Keys are lowercased fragments matched against the wine name.
@@ -132,36 +117,6 @@ BOLD_RED_KEYWORDS = [
 
 
 # ---------------------------------------------------------------------------
-# Urgency scoring (mirrors pairing.py — reimplemented to stay standalone)
-# ---------------------------------------------------------------------------
-
-
-def urgency_score(wine: dict) -> int:
-    """Priority score — lower is more urgent.
-
-    0  past peak      (EndConsume < current year)
-    1  expiring now   (EndConsume == current year)
-    2  expiring soon  (EndConsume == current year + 1)
-    3  peak window    (BeginConsume <= current year <= EndConsume)
-    4  entering window(BeginConsume == current year or current year + 1)
-    5  long-ager / unknown
-    """
-    end = wine.get("EndConsume")
-    begin = wine.get("BeginConsume")
-    if end is not None and end < CURRENT_YEAR:
-        return 0
-    if end is not None and end == CURRENT_YEAR:
-        return 1
-    if end is not None and end == CURRENT_YEAR + 1:
-        return 2
-    if begin is not None and end is not None and begin <= CURRENT_YEAR <= end:
-        return 3
-    if begin is not None and begin in (CURRENT_YEAR, CURRENT_YEAR + 1):
-        return 4
-    return 5
-
-
-# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -230,11 +185,6 @@ def build_score(wine: dict) -> str | None:
         return None
     # Format: CT90 for whole numbers, CT90.5 for fractional
     return f"CT{ct:g}"
-
-
-def normalize(name: str) -> str:
-    """Lowercase, strip accents-insensitive normalization for fragment matching."""
-    return re.sub(r"[^a-z0-9 ]", "", name.lower()).strip()
 
 
 def is_long_ager_hold(wine: dict) -> bool:
@@ -333,7 +283,7 @@ def seasonal_score(wine: dict, season: str) -> int:
 
 
 def generate_week_dates(start: date) -> list[date]:
-    """Generate 104 Monday dates starting from *start*."""
+    """Generate TOTAL_WEEKS Monday dates starting from *start*."""
     return [start + timedelta(weeks=i) for i in range(TOTAL_WEEKS)]
 
 
@@ -637,7 +587,7 @@ def build_quarter_info(week_dates: list[date]) -> dict:
     """Build the quarterInfo object from actual week dates."""
     # Identify the calendar year for each plan year
     y1_year = week_dates[0].year
-    y2_year = week_dates[52].year if len(week_dates) > 52 else y1_year + 1
+    y2_year = y1_year + 1
 
     quarter_info: dict[str, dict] = {}
     for season in ("spring", "summer", "fall", "winter"):
@@ -860,7 +810,7 @@ def schedule_evolution_tracks(
 
 
 def generate_plan(inventory: list[dict]) -> dict:
-    """Generate the full 104-week plan from inventory data."""
+    """Generate the full 52-week plan from inventory data."""
     today = date.today()
     start = monday_of_week(today)
     week_dates = generate_week_dates(start)
@@ -888,7 +838,7 @@ def generate_plan(inventory: list[dict]) -> dict:
 
     for i, week_date in enumerate(week_dates):
         week_num = i + 1
-        plan_year = 1 if i < 52 else 2
+        plan_year = 1
         season = season_for_date(week_date)
 
         if i in reserved:

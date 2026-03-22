@@ -15,8 +15,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from wine_keywords import PAIRING_RULES
-
-CURRENT_YEAR = date.today().year
+from wine_utils import CURRENT_YEAR, urgency_score
 
 
 def _parse_plan_date(raw: str) -> date:
@@ -61,23 +60,6 @@ def wine_matches_styles(wine: dict, prefer_list: list[str]) -> bool:
     """Check if an inventory wine matches any of the preferred style keywords."""
     searchable = wine.get("_searchable", "")
     return any(style in searchable for style in prefer_list)
-
-
-def urgency_score(wine: dict) -> int:
-    """Priority score — lower is more urgent. Matches fetch.md prioritization."""
-    end = wine.get("EndConsume")
-    begin = wine.get("BeginConsume")
-    if end is not None and end < CURRENT_YEAR:
-        return 0  # past peak — drink immediately
-    if end is not None and end == CURRENT_YEAR:
-        return 1  # expiring this year
-    if end is not None and end == CURRENT_YEAR + 1:
-        return 2  # expiring next year
-    if begin is not None and end is not None and begin <= CURRENT_YEAR <= end:
-        return 3  # peak window
-    if begin is not None and begin in (CURRENT_YEAR, CURRENT_YEAR + 1):
-        return 4  # just entering window
-    return 5  # long-ager or unknown
 
 
 def find_best_bottle(
@@ -245,7 +227,20 @@ def suggest_pairings(
             )
             continue
 
-        wine_name = f"{week.get('name', '')} {week.get('appellation', '')}"
+        # Look up varietal from inventory to improve pairing score accuracy
+        inv_varietal = ""
+        week_vintage = str(week.get("vintage", ""))
+        week_name_lower = week.get("name", "").lower()
+        for inv in inventory:
+            inv_name_lower = inv.get("Wine", "").lower()
+            if str(inv.get("Vintage", "")) == week_vintage and (
+                inv_name_lower in week_name_lower or week_name_lower in inv_name_lower
+            ):
+                inv_varietal = inv.get("Varietal", "")
+                break
+        wine_name = (
+            f"{week.get('name', '')} {week.get('appellation', '')} {inv_varietal}"
+        )
         pairing = score_pairing(wine_name, entry["keywords"])
 
         result = {

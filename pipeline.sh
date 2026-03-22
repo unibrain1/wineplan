@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Shared pipeline logic — sourced by fetch.sh and fetch_docker.sh
 # Expects: working directory set to project root, env vars already loaded
 
