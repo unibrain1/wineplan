@@ -70,13 +70,26 @@ Promise.all([
     if (pairingKeys[key]) return;
     pairingKeys[key] = true;
 
+    // Find which plan week this pairing falls in
     var weekNum = '', weekDate = p.date;
-    weeks.forEach(function(w) {
-      var ws = new Date(w.date);
+    var pd = new Date(p.date + 'T12:00:00');
+    for (var wi = 0; wi < weeks.length; wi++) {
+      var ws = new Date(weeks[wi].date);
       var we = new Date(ws); we.setDate(we.getDate() + 6);
-      var pd = new Date(p.date + 'T12:00:00');
-      if (pd >= ws && pd <= we) { weekNum = w.week; weekDate = w.date; }
-    });
+      if (pd >= ws && pd <= we) {
+        weekNum = weeks[wi].week;
+        weekDate = weeks[wi].date;
+        break;
+      }
+    }
+    // If before first week, attach to week 1
+    if (!weekNum && weeks.length > 0) {
+      var firstWs = new Date(weeks[0].date);
+      if (pd < firstWs) {
+        weekNum = weeks[0].week;
+        weekDate = weeks[0].date;
+      }
+    }
 
     var badge = (sb.type || 'Red').toLowerCase().replace('rosé', 'rose');
     rows.push({
@@ -86,7 +99,14 @@ Promise.all([
     });
   });
 
-  rows.sort(function(a, b) { return (a.week || 999) - (b.week || 999); });
+  // Sort by week, then planned before pairing
+  rows.sort(function(a, b) {
+    var wDiff = (a.week || 999) - (b.week || 999);
+    if (wDiff !== 0) return wDiff;
+    if (a.type === 'planned' && b.type === 'pairing') return -1;
+    if (a.type === 'pairing' && b.type === 'planned') return 1;
+    return 0;
+  });
 
   var seasonNames = { spring: 'Spring', summer: 'Summer', fall: 'Fall', winter: 'Winter' };
 
