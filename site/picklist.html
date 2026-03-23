@@ -6,7 +6,6 @@
 <title>The Sommelier — Pick List</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;1,400&display=swap" rel="stylesheet">
 <link rel="icon" href="favicon.ico" type="image/x-icon">
-<link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="picklist.css">
 </head>
 <body class="picklist-page">
@@ -212,7 +211,7 @@ Promise.all([
       week: weekNum, date: weekDate, vintage: String(sb.vintage), name: sb.wine,
       badge: badge, urgent: false, season: '', type: 'pairing',
       location: sb.location || '',
-      notes: 'for: ' + p.meal.split('\n')[0].substring(0, 30)
+      notes: 'Sommelier pick'
     });
   });
 
