@@ -138,6 +138,11 @@ def find_best_bottle(
         "score": best.get("CT"),
         "quantity": best.get("Quantity", 1),
         "urgency": urgency_label,
+        "location": " / ".join(
+            p
+            for p in [best.get("Location", ""), best.get("Bin", "")]
+            if p and p != "Unknown"
+        ),
     }
     if planned_week:
         result["move_from_week"] = planned_week

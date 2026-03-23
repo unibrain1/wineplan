@@ -14,6 +14,7 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+from plan_config import EVOLUTION_TRACKS, HOLIDAYS
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
 
 # ---------------------------------------------------------------------------
@@ -22,72 +23,6 @@ from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
 
 TOTAL_WEEKS = 52
 
-# Wines that must hold ≥ 2 bottles back (schedule at most qty - 2, min 1).
-# Keys are lowercased fragments matched against the wine name.
-HOLD_BACK_NAMES: list[str] = [
-    "adamant cellars cabernet sauvignon don't be a dull boy 2021",
-    "adamant cellars don't be a dull boy 2021",
-    "don't be a dull boy 2021",
-]
-
-# Long-ager hold list — do not schedule unless EndConsume is within the
-# planning horizon (current year + 2).  Each entry is (name_fragment, vintage).
-LONG_AGER_HOLD: list[tuple[str, str]] = [
-    ("roserock", "2022"),
-    ("roserock", "2024"),
-    ("laurène", "2021"),
-    ("laurène", "2022"),
-    ("laurène", "2023"),
-    ("louise", "2021"),
-    ("louise", "2022"),
-    ("louise", "2023"),
-    ("domaine drouhin oregon pinot noir", "2019"),
-    ("domaine drouhin oregon pinot noir", "2022"),
-    ("domaine drouhin oregon pinot noir", "2024"),
-    ("caymus cabernet sauvignon", "2023"),
-    ("arthur chardonnay", "2023"),
-    ("arthur chardonnay", "2024"),
-    ("dion vineyard pinot noir old vines", "2020"),
-    ("dion vineyard pinot noir old vines", "2021"),
-    ("origine 36", ""),
-    ("origine 37", ""),
-]
-
-# Holiday anchors: (name, approximate month, approximate day)
-HOLIDAYS: list[tuple[str, int, int]] = [
-    ("Thanksgiving", 11, 26),  # late November
-    ("Christmas", 12, 18),  # mid December
-    ("New Year's Eve", 12, 28),  # late December
-    ("Valentine's Day", 2, 14),  # mid February
-    ("4th of July", 7, 4),  # early July
-    ("Anniversary", 5, 28),  # May 28
-]
-
-# Evolution tracking definitions.
-# Each entry: (label, name_fragment, preferred_month_range, preferred_month)
-EVOLUTION_TRACKS: list[dict] = [
-    {
-        "label": "Laurène",
-        "name_fragment": "laurène",
-        "season_months": (10, 11),  # October–November
-        "preferred_month": 11,  # Thanksgiving month
-        "occasion_template": "{occasion} — Laurène evolution",
-    },
-    {
-        "label": "Louise",
-        "name_fragment": "louise",
-        "season_months": (12, 12),  # December
-        "preferred_month": 12,
-        "occasion_template": "{occasion} — Louise evolution",
-    },
-    {
-        "label": "Roserock",
-        "name_fragment": "roserock",
-        "season_months": (2, 2),  # February
-        "preferred_month": 2,
-        "occasion_template": "{occasion} — Roserock evolution",
-    },
-]
 
 # Seasonal badge preferences (applied as tie-breakers / candidates filter)
 # Maps season name → preferred badge list in priority order
@@ -187,40 +122,23 @@ def build_score(wine: dict) -> str | None:
     return f"CT{ct:g}"
 
 
-def is_long_ager_hold(wine: dict) -> bool:
-    """Return True if this wine is on the long-ager hold list.
-
-    Hold-list items are blocked unless EndConsume falls within the 2-year
-    planning horizon (caller checks that separately).
-    """
-    name_norm = normalize(wine.get("Wine", ""))
-    vintage_str = str(wine.get("Vintage", ""))
-    for frag, vint in LONG_AGER_HOLD:
-        if normalize(frag) in name_norm:
-            if vint == "" or vint == vintage_str:
-                return True
-    return False
+def build_location(wine: dict) -> str:
+    """Return 'Location / Bin' string for cellar pick list."""
+    parts = [wine.get("Location", ""), wine.get("Bin", "")]
+    return " / ".join(p for p in parts if p and p != "Unknown")
 
 
-def requires_hold_back(wine: dict) -> bool:
-    """Return True if the hold-back rule applies (schedule at most qty-2)."""
-    name_lower = wine.get("Wine", "").lower()
-    vintage_str = str(wine.get("Vintage", ""))
-    for entry in HOLD_BACK_NAMES:
-        parts = entry.rsplit(" ", 1)
-        frag = parts[0]
-        vint = parts[1] if len(parts) > 1 else ""
-        if frag in name_lower and (vint == "" or vint == vintage_str):
-            return True
-    return False
+def is_long_ager(wine: dict) -> bool:
+    """Return True if this wine should be held — BeginConsume > current_year + 2."""
+    begin = wine.get("BeginConsume")
+    return begin is not None and begin > CURRENT_YEAR + 2
 
 
 def max_schedulable(wine: dict) -> int:
     """Maximum bottles of this wine that may appear in the plan.
 
-    General hold-back rule: if 3+ bottles of the same wine, hold at least
+    Hold-back rule: if 3+ bottles of the same wine, hold at least
     2 back for future drinking (schedule at most qty - 2, minimum 1).
-    Named hold-back entries follow the same rule regardless of quantity.
     """
     qty = wine.get("Quantity", 1)
     if qty <= 0:
@@ -345,12 +263,6 @@ def build_candidates(inventory: list[dict]) -> list[dict]:
                 pass  # just entering — allow
             else:
                 continue  # true long-ager — skip
-
-        # Skip hold-list wines if their EndConsume is beyond horizon
-        if is_long_ager_hold(wine):
-            end = wine.get("EndConsume")
-            if end is None or end > CURRENT_YEAR + 2:
-                continue
 
         if max_schedulable(wine) <= 0:
             continue
@@ -701,6 +613,7 @@ def make_entry(
         "evolution": evolution,
         "occasion": occasion,
         "note": "",
+        "location": build_location(wine),
     }
 
 

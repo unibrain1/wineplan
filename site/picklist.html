@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Sommelier — Pick List</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;1,400&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.ico" type="image/x-icon">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="picklist.css">
+</head>
+<body class="picklist-page">
+
+<a href="index.html" class="back-link">&larr; Back to plan</a>
+<h1>Cellar Pick List</h1>
+<div class="subtitle" id="subtitle">Loading...</div>
+
+<table>
+  <thead>
+    <tr>
+      <th class="check"></th>
+      <th class="wk">Wk</th>
+      <th class="date-col">Date</th>
+      <th>Type</th>
+      <th>Wine</th>
+      <th>Location</th>
+    </tr>
+  </thead>
+  <tbody id="picklist-body">
+  </tbody>
+</table>
+
+<div class="total" id="total"></div>
+
+<script>
+Promise.all([
+  fetch('plan.json').then(function(r) { return r.json(); }),
+  fetch('pairing_suggestions.json').then(function(r) { return r.json(); }).catch(function() { return { suggestions: [] }; }),
+  fetch('report.json').then(function(r) { return r.json(); }).catch(function() { return {}; })
+]).then(function(results) {
+  var plan = results[0];
+  var pairings = (results[1] && results[1].suggestions) || [];
+  var report = results[2] || {};
+  var weeks = plan.allWeeks;
+  var body = document.getElementById('picklist-body');
+  var currentSeason = '';
+  var totalBottles = 0;
+
+  // Build location index from report's inventory data if available
+  // (report.json doesn't have location, so we'll leave it empty for now
+  //  — location data will be added when generate_plan includes it)
+
+  var rows = [];
+
+  weeks.forEach(function(w) {
+    rows.push({
+      week: w.week, date: w.date, vintage: w.vintage, name: w.name,
+      badge: w.badge, urgent: w.urgent, season: w.season, type: 'planned',
+      location: w.location || ''
+    });
+  });
+
+  var plannedKeys = {};
+  rows.forEach(function(r) { plannedKeys[r.vintage + '|' + r.name] = true; });
+
+  pairings.forEach(function(p) {
+    if (!p.suggested_bottle) return;
+    var sb = p.suggested_bottle;
+    var key = sb.vintage + '|' + sb.wine;
+    if (plannedKeys[key]) return;
+    plannedKeys[key] = true;
+
+    var weekNum = '', weekDate = p.date;
+    weeks.forEach(function(w) {
+      var ws = new Date(w.date);
+      var we = new Date(ws); we.setDate(we.getDate() + 6);
+      var pd = new Date(p.date + 'T12:00:00');
+      if (pd >= ws && pd <= we) { weekNum = w.week; weekDate = w.date; }
+    });
+
+    var badge = (sb.type || 'Red').toLowerCase().replace('rosé', 'rose');
+    rows.push({
+      week: weekNum, date: weekDate, vintage: String(sb.vintage), name: sb.wine,
+      badge: badge, urgent: false, season: '', type: 'pairing',
+      location: sb.location || ''
+    });
+  });
+
+  rows.sort(function(a, b) { return (a.week || 999) - (b.week || 999); });
+
+  var seasonNames = { spring: 'Spring', summer: 'Summer', fall: 'Fall', winter: 'Winter' };
+
+  rows.forEach(function(r) {
+    if (r.type === 'planned' && r.season !== currentSeason) {
+      currentSeason = r.season;
+      var headerRow = document.createElement('tr');
+      headerRow.className = 'section-header';
+      var headerCell = document.createElement('td');
+      headerCell.colSpan = 6;
+      headerCell.textContent = seasonNames[r.season] || r.season;
+      headerRow.appendChild(headerCell);
+      body.appendChild(headerRow);
+    }
+
+    var tr = document.createElement('tr');
+    if (r.urgent) tr.className = 'urgent-row';
+    if (r.type === 'pairing') tr.className = 'pairing-row';
+
+    var typeLabel = r.badge === 'rose' ? 'Rosé' : r.badge.charAt(0).toUpperCase() + r.badge.slice(1);
+
+    var tdCheck = document.createElement('td');
+    tdCheck.className = 'check';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    tdCheck.appendChild(cb);
+    tr.appendChild(tdCheck);
+
+    var tdWk = document.createElement('td');
+    tdWk.className = 'wk';
+    tdWk.textContent = r.week || '';
+    tr.appendChild(tdWk);
+
+    var tdDate = document.createElement('td');
+    tdDate.className = 'date-col';
+    tdDate.textContent = r.date || '';
+    tr.appendChild(tdDate);
+
+    var tdType = document.createElement('td');
+    var badgeEl = document.createElement('span');
+    badgeEl.className = 'type-badge type-' + r.badge;
+    badgeEl.textContent = typeLabel;
+    tdType.appendChild(badgeEl);
+    tr.appendChild(tdType);
+
+    var tdWine = document.createElement('td');
+    tdWine.className = 'wine-col';
+    if (r.type === 'pairing') {
+      var pLabel = document.createElement('span');
+      pLabel.className = 'pairing-label';
+      pLabel.textContent = 'Pairing';
+      tdWine.appendChild(pLabel);
+    }
+    var vSpan = document.createElement('span');
+    vSpan.className = 'vintage';
+    vSpan.textContent = r.vintage;
+    tdWine.appendChild(vSpan);
+    tdWine.appendChild(document.createTextNode(' ' + r.name));
+    tr.appendChild(tdWine);
+
+    var tdLoc = document.createElement('td');
+    tdLoc.className = 'loc';
+    tdLoc.textContent = r.location;
+    tr.appendChild(tdLoc);
+
+    body.appendChild(tr);
+    totalBottles++;
+  });
+
+  document.getElementById('subtitle').textContent =
+    totalBottles + ' bottles \u00b7 Generated ' + (plan.changelog ? plan.changelog.date : 'today');
+  document.getElementById('total').textContent = totalBottles + ' bottles total';
+});
+</script>
+</body>
+</html>
