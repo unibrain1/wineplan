@@ -52,7 +52,9 @@ Self-updating: push code to GitHub, next pipeline run picks it up automatically.
 ```bash
 pip install -r requirements.txt
 cp .env.sample .env
+cp scripts/plan_config.py.sample scripts/plan_config.py
 # Edit .env with your credentials
+# Edit scripts/plan_config.py with your holidays and evolution tracks
 ```
 
 ### Run
@@ -154,6 +156,50 @@ And make the same `pipeline.sh` change as Option 1.
 ### Option 3: Other secret managers
 
 Adapt the `op read` lines in `pipeline.sh` to use your preferred secret manager (Vault, AWS Secrets Manager, Bitwarden CLI, etc.).
+
+## Plan Configuration
+
+Edit `scripts/plan_config.py` to customize the plan for your cellar. A sample is provided at `scripts/plan_config.py.sample`.
+
+### Holidays
+
+Anchor special bottles to dates that matter to you. The plan generator finds the nearest week and assigns a high-score bottle.
+
+```python
+HOLIDAYS = [
+    ("Thanksgiving", 11, 26),
+    ("Christmas", 12, 18),
+    ("New Year's Eve", 12, 28),
+    ("Valentine's Day", 2, 14),
+    ("4th of July", 7, 4),
+    ("Anniversary", 6, 15),       # your date
+    ("Birthday", 9, 22),          # your date
+]
+```
+
+### Evolution Tracks
+
+Track how a specific wine develops across vintages by opening one bottle per year. The generator picks the most urgent vintage within the drinking window and schedules it in your preferred month.
+
+```python
+EVOLUTION_TRACKS = [
+    {
+        "label": "Laurène",              # display name
+        "name_fragment": "laurène",       # matched against inventory wine names
+        "season_months": (10, 11),        # schedule in Oct–Nov
+        "preferred_month": 11,            # ideally November
+        "occasion_template": "{occasion} — Laurène evolution",
+    },
+]
+```
+
+If an evolution track falls on the same week as a holiday (e.g., Laurène in November near Thanksgiving), the occasions merge — the card shows both.
+
+### Hold-Back Rules
+
+These are automatic, not configured:
+- **Long-ager hold**: any bottle where `BeginConsume > current year + 2` is not scheduled
+- **Quantity hold-back**: if you have 3+ bottles of the same wine, at most `quantity - 2` are scheduled (minimum 1)
 
 ## The Sommelier
 

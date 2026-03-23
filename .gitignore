@@ -1,5 +1,6 @@
-# Secrets
+# Secrets and personal config
 .env
+scripts/plan_config.py
 
 # Generated data
 data/

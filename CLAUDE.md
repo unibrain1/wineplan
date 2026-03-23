@@ -40,6 +40,8 @@ site/                         — Served by nginx (data + presentation + style s
   pairing_suggestions.json    — Pairing suggestions (generated)
   report.json                 — Inventory diff report (generated)
 scripts/
+  plan_config.py              — Holidays + evolution tracks (gitignored, personal)
+  plan_config.py.sample       — Template for plan_config.py
   wine_utils.py               — Shared: CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
   generate_plan.py            — Deterministic plan generator (rules-based)
   generate_notes.py           — Tasting notes (Claude CLI, augmented with CT notes/food tags)
@@ -121,8 +123,8 @@ See `docs/fetch.md` for the complete rules reference:
 - Priority: past peak → expiring → peak window → entering window → long-agers (held)
 - Long-ager hold: BeginConsume > current_year + 2, or hold back 2 if 3+ bottles
 - Seasonal: sparkling/rosé/white for spring-summer, bold reds for fall-winter
-- Evolution: Laurène (Thanksgiving), Louise (Christmas), Roserock (Valentine's)
-- Holidays: special bottles anchored to 6 dates
+- Evolution tracks and holidays configured in `scripts/plan_config.py` (gitignored, personal data)
+- Sample at `scripts/plan_config.py.sample`
 
 ## CellarTracker Data Sources
 
