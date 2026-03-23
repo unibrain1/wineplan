@@ -10,9 +10,15 @@ Usage:
 """
 
 import json
+import os
 import sys
+import time
 from datetime import date, timedelta
 from pathlib import Path
+
+# Ensure TZ env var is respected (Docker containers default to UTC)
+if "TZ" in os.environ:
+    time.tzset()
 
 from plan_config import EVOLUTION_TRACKS, HOLIDAYS
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score

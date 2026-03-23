@@ -8,8 +8,14 @@ Symbols exported:
   urgency_score — bottle urgency priority (0 = most urgent)
 """
 
+import os
 import re
+import time
 from datetime import date
+
+# Ensure TZ env var is respected before using date.today()
+if "TZ" in os.environ:
+    time.tzset()
 
 # ---------------------------------------------------------------------------
 # Constants
