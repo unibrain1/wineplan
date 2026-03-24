@@ -821,7 +821,7 @@ def _pick_for_urgent_phase(
 
 
 def build_changelog(old_weeks: list[dict] | None, new_weeks: list[dict]) -> dict:
-    today_str = date.today().strftime("%B %-d, %Y")
+    today_str = date.today().strftime("%Y-%m-%d")
     if old_weeks is None:
         return {
             "date": today_str,
@@ -870,10 +870,12 @@ def main() -> None:
     # Load previous plan for changelog diffing (from the live site plan)
     live_plan_path = Path("site/plan.json")
     old_weeks: list[dict] | None = None
+    old_history: list[dict] = []
     if live_plan_path.exists():
         try:
             old_data = json.loads(live_plan_path.read_text(encoding="utf-8"))
             old_weeks = old_data.get("allWeeks")
+            old_history = old_data.get("changelogHistory", [])
             # Back up the live plan
             previous_path.parent.mkdir(parents=True, exist_ok=True)
             previous_path.write_text(
@@ -888,7 +890,20 @@ def main() -> None:
     plan_data = generate_plan(inventory)
 
     changelog = build_changelog(old_weeks, plan_data["allWeeks"])
-    plan_data["changelog"] = changelog
+
+    # Accumulate changelog history (only if there are actual changes)
+    changelog_history = list(old_history)  # copy
+    if changelog["changes"]:
+        changelog_history.insert(0, changelog)  # newest first
+
+    # Prune entries older than 90 days
+    cutoff = (date.today() - timedelta(days=90)).isoformat()
+    changelog_history = [
+        entry for entry in changelog_history if entry.get("date", "") >= cutoff
+    ]
+
+    plan_data["changelogHistory"] = changelog_history
+    plan_data["changelog"] = changelog  # keep for backward compat
 
     plan_path.parent.mkdir(parents=True, exist_ok=True)
     plan_path.write_text(

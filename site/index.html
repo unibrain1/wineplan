@@ -65,7 +65,6 @@
 <script>
 let allWeeks = [];
 let quarterInfo = {};
-let changelog = {};
 let pairingSuggestions = [];
 
 const typeColors = { sparkling:'#29abe0', rose:'#e83e8c', white:'#c49b2a', red:'#8b3a3a' };
@@ -246,43 +245,83 @@ function renderCalendar() {
 }
 
 function renderChangelog() {
-  const view = document.getElementById('changelog-view');
+  var view = document.getElementById('changelog-view');
   view.innerHTML = '';
-  const hc = document.createElement('div');
+
+  var history = changelogHistory || [];
+
+  if (!history.length) {
+    view.innerHTML = '<div class="changelog-header-card"><h2>What Changed</h2><p class="changelog-summary">No changes in the last 90 days.</p></div>';
+    return;
+  }
+
+  // Header card
+  var hc = document.createElement('div');
   hc.className = 'changelog-header-card';
-  hc.innerHTML = '<div class="changelog-date">Sync date: ' + changelog.date + '</div><h2>What Changed</h2><p class="changelog-summary">' + changelog.summary + '</p>';
+  hc.innerHTML = '<h2>What Changed</h2><p class="changelog-summary">Rolling 90-day history of plan changes. Only syncs that produced changes are shown.</p>';
   view.appendChild(hc);
-  [
-    { type:'added',   label:'Added to Plan' },
-    { type:'fixed',   label:'Adjusted' },
-    { type:'removed', label:'Removed from Plan' }
-  ].forEach(function(sec) {
-    const items = changelog.changes.filter(function(c){ return c.type === sec.type; });
-    if (!items.length) return;
-    const s = document.createElement('div');
-    s.className = 'changelog-section';
-    const t = document.createElement('div');
-    t.className = 'changelog-section-title';
-    t.textContent = sec.label + ' (' + items.length + ')';
-    s.appendChild(t);
-    const id = document.createElement('div');
-    id.className = 'changelog-items';
-    items.forEach(function(change) {
-      const typeLabel = change.type === 'added' ? 'Added' : change.type === 'fixed' ? 'Adjusted' : 'Removed';
-      const item = document.createElement('div');
-      item.className = 'changelog-item ' + change.type;
-      item.innerHTML = '<span class="changelog-week-pill">Wk ' + change.week + '</span>' +
-        '<span class="changelog-type-badge">' + typeLabel + '</span>' +
-        '<span class="changelog-description">' + change.description + '</span>';
-      id.appendChild(item);
-    });
-    s.appendChild(id);
-    view.appendChild(s);
+
+  // Table
+  var table = document.createElement('table');
+  table.className = 'changelog-table';
+  table.innerHTML = '<thead><tr><th>Date</th><th>Added</th><th>Removed</th></tr></thead>';
+  var tbody = document.createElement('tbody');
+
+  history.forEach(function(entry) {
+    var tr = document.createElement('tr');
+
+    // Date cell
+    var tdDate = document.createElement('td');
+    tdDate.className = 'changelog-date-cell';
+    tdDate.textContent = formatChangelogDate(entry.date);
+    tr.appendChild(tdDate);
+
+    tr.appendChild(renderChangeCell(entry.changes, 'added'));
+    tr.appendChild(renderChangeCell(entry.changes, 'removed'));
+
+    tbody.appendChild(tr);
   });
+
+  table.appendChild(tbody);
+  view.appendChild(table);
+}
+
+function renderChangeCell(changes, type) {
+  var items = changes.filter(function(c) { return c.type === type; });
+  var td = document.createElement('td');
+  if (items.length) {
+    items.forEach(function(c) {
+      var div = document.createElement('div');
+      div.className = 'changelog-wine changelog-' + type;
+      div.innerHTML = '<span class="changelog-wine-pill">Wk ' + c.week + '</span>' + escapeHtml(c.description);
+      td.appendChild(div);
+    });
+  } else {
+    td.className = 'changelog-empty';
+    td.textContent = '\u2014';
+  }
+  return td;
+}
+
+function formatChangelogDate(isoDate) {
+  if (!isoDate) return '';
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var parts = isoDate.split('-');
+  if (parts.length !== 3) return isoDate;
+  var m = parseInt(parts[1], 10) - 1;
+  var d = parseInt(parts[2], 10);
+  return months[m] + ' ' + d + ', ' + parts[0];
+}
+
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 let currentYear = 'y1';
 let currentFilter = 'all';
+var changelogHistory = [];
 
 function getWeeks() {
   let w = allWeeks;
@@ -396,7 +435,7 @@ Promise.all([
   var planData = results[0];
   allWeeks    = planData.allWeeks;
   quarterInfo = planData.quarterInfo;
-  changelog   = planData.changelog;
+  changelogHistory = planData.changelogHistory || [];
   pairingSuggestions = (results[1] && results[1].suggestions) || [];
   document.getElementById('stat-planned').textContent   = allWeeks.length;
   document.getElementById('stat-urgent').textContent    = allWeeks.filter(function(w){ return w.urgent === true; }).length;
