@@ -21,7 +21,7 @@ if "TZ" in os.environ:
     time.tzset()
 
 from plan_config import EVOLUTION_TRACKS, HOLIDAYS
-from scoring import seasonal_score
+from scoring import composite_score
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
 
 # ---------------------------------------------------------------------------
@@ -186,10 +186,9 @@ def build_candidates(inventory: list[dict]) -> list[dict]:
     planning horizon are excluded entirely.
 
     Sort order:
-      1. urgency_score ascending (most urgent first)
-      2. CT score descending (higher rated first within same urgency tier)
-      3. EndConsume ascending (tightest window first)
-      4. Wine name ascending (deterministic tie-break)
+      1. composite_score ascending (most desirable first; uses neutral season/empty placed)
+      2. EndConsume ascending (tightest window first)
+      3. Wine name ascending (deterministic tie-break)
     """
     candidates = []
     for wine in inventory:
@@ -213,8 +212,7 @@ def build_candidates(inventory: list[dict]) -> list[dict]:
 
     candidates.sort(
         key=lambda w: (
-            urgency_score(w),
-            -(w.get("CT") or 0),
+            composite_score(w, "summer", week_index=0, placed=[]),
             w.get("EndConsume") or 9999,
             w.get("Wine", ""),
         )
@@ -276,6 +274,7 @@ def assign_holiday_anchors(
     candidates: list[dict],
     reserved: dict[int, dict],  # week_index → wine
     scheduled_counts: dict[str, int],
+    placed: list[dict | None] | None = None,
 ) -> None:
     """For each holiday, find the nearest unoccupied week and reserve a bottle.
 
@@ -337,7 +336,8 @@ def assign_holiday_anchors(
                 candidates,
                 scheduled_counts,
                 season,
-                prefer_special=True,
+                week_index=idx,
+                placed=placed,
                 exclude_keys=set(reserved_keys(reserved)),
             )
             if best is None:
@@ -367,15 +367,12 @@ def _pick_best_for_slot(
     candidates: list[dict],
     scheduled_counts: dict[str, int],
     season: str,
-    prefer_special: bool = False,
+    week_index: int = 0,
+    placed: list[dict | None] | None = None,
     exclude_keys: set[str] | None = None,
     required_fragment: str | None = None,
 ) -> dict | None:
-    """Pick the best available bottle for a given season slot.
-
-    Candidates are already sorted by urgency.  Apply seasonal preference as a
-    secondary sort only, to avoid bumping urgent bottles too far back.
-    """
+    """Pick the best available bottle for a given slot using composite scoring."""
     exclude_keys = exclude_keys or set()
     pool = []
     for wine in candidates:
@@ -393,12 +390,9 @@ def _pick_best_for_slot(
     if not pool:
         return None
 
-    # Sort pool: urgent bottles first, seasonal fit as tie-breaker
     pool.sort(
         key=lambda w: (
-            urgency_score(w),
-            seasonal_score(w, season),
-            -(w.get("CT") or 0),
+            composite_score(w, season, week_index, placed or []),
             w.get("EndConsume") or 9999,
             w.get("Wine", ""),
         )
@@ -678,11 +672,24 @@ def generate_plan(inventory: list[dict]) -> dict:
     # reserved[week_index] = {"wine": ..., "special": ..., "evolution": ..., "occasion": ...}
     reserved: dict[int, dict] = {}
 
+    # Track placed wines for diversity scoring
+    placed: list[dict | None] = [None] * TOTAL_WEEKS
+
     # --- Phase 1: Reserve evolution tracks ---
     schedule_evolution_tracks(week_dates, candidates, reserved, scheduled_counts)
 
+    # Populate placed[] with evolution-track wines so holiday diversity scoring is accurate
+    for idx, slot in reserved.items():
+        placed[idx] = slot["wine"]
+
     # --- Phase 2: Reserve holiday anchors ---
-    assign_holiday_anchors(week_dates, candidates, reserved, scheduled_counts)
+    assign_holiday_anchors(
+        week_dates, candidates, reserved, scheduled_counts, placed=placed
+    )
+
+    # Update placed[] with holiday anchor wines
+    for idx, slot in reserved.items():
+        placed[idx] = slot["wine"]
 
     # --- Phase 3: Fill remaining weeks ---
     # For weeks 0-7 (first 8): strongly prefer urgent/past-peak regardless of season
@@ -722,20 +729,42 @@ def generate_plan(inventory: list[dict]) -> dict:
         if i < 8:
             # Phase A: past-peak and urgent bottles first
             wine = _pick_for_urgent_phase(
-                candidates, scheduled_counts, season, max_urgency=1
+                candidates,
+                scheduled_counts,
+                season,
+                max_urgency=1,
+                week_index=i,
+                placed=placed,
             )
         elif i < 16:
             # Phase B: expiring this/next year
             wine = _pick_for_urgent_phase(
-                candidates, scheduled_counts, season, max_urgency=2
+                candidates,
+                scheduled_counts,
+                season,
+                max_urgency=2,
+                week_index=i,
+                placed=placed,
             )
         else:
-            # Phase C: seasonal selection
-            wine = _pick_best_for_slot(candidates, scheduled_counts, season)
+            # Phase C: composite scoring
+            wine = _pick_best_for_slot(
+                candidates,
+                scheduled_counts,
+                season,
+                week_index=i,
+                placed=placed,
+            )
 
         if wine is None:
             # Fallback: any available bottle
-            wine = _pick_best_for_slot(candidates, scheduled_counts, season)
+            wine = _pick_best_for_slot(
+                candidates,
+                scheduled_counts,
+                season,
+                week_index=i,
+                placed=placed,
+            )
 
         if wine is None:
             # Nothing left — this should not happen if inventory is sufficient
@@ -746,6 +775,7 @@ def generate_plan(inventory: list[dict]) -> dict:
 
         key = wine_key(wine)
         scheduled_counts[key] = scheduled_counts.get(key, 0) + 1
+        placed[i] = wine
         entry = make_entry(week_num, plan_year, week_date, wine)
         all_weeks.append(entry)
 
@@ -762,15 +792,27 @@ def _pick_for_urgent_phase(
     scheduled_counts: dict[str, int],
     season: str,
     max_urgency: int,
+    week_index: int = 0,
+    placed: list[dict | None] | None = None,
 ) -> dict | None:
-    """Pick the most urgent available bottle at or below *max_urgency* tier."""
+    """Pick the best bottle at or below *max_urgency* tier, sorted by composite score."""
+    pool = []
     for wine in candidates:
         key = wine_key(wine)
         if scheduled_counts.get(key, 0) >= max_schedulable(wine):
             continue
         if urgency_score(wine) <= max_urgency:
-            return wine
-    return None
+            pool.append(wine)
+    if not pool:
+        return None
+    pool.sort(
+        key=lambda w: (
+            composite_score(w, season, week_index, placed or []),
+            w.get("EndConsume") or 9999,
+            w.get("Wine", ""),
+        )
+    )
+    return pool[0]
 
 
 # ---------------------------------------------------------------------------
