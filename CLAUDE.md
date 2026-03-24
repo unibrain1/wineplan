@@ -75,7 +75,12 @@ bash fetch.sh
 
 ## Docker Deployment
 
+Production runs on **docker02**. To restart or rebuild the running application, SSH to docker02:
+
 ```bash
+# SSH to production host
+ssh docker02
+
 # First time or Dockerfile changes
 docker compose up --build -d
 

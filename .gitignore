@@ -31,6 +31,9 @@ __pycache__/
 # Sample files
 sample.html
 
+# Planning documents
+plans/
+
 # Generated site artifacts
 site/plan.json
 site/pairing_suggestions.json
