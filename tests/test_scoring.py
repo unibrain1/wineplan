@@ -16,7 +16,7 @@ Formula reference (from scoring.py):
 
 import pytest
 
-from scoring import window_position_score
+from scoring import seasonal_fit_score, window_position_score
 from wine_utils import CURRENT_YEAR
 
 Y = CURRENT_YEAR  # shorthand used throughout
@@ -292,3 +292,69 @@ class TestWindowPositionEdgeCases:
             assert score >= 0.0, (
                 f"Score {score} went below 0 at years_before={years_before}"
             )
+
+
+# ---------------------------------------------------------------------------
+# TestSeasonalFitMapping
+# ---------------------------------------------------------------------------
+
+
+class TestSeasonalFitMapping:
+    """seasonal_fit_score() maps seasonal_score() penalty (0/1/2) to 100/50/0.
+
+    SEASONAL_FIT_MAP = {0: 100.0, 1: 50.0, 2: 0.0}
+
+    Badge resolution: TYPE_TO_BADGE.get(wine["Type"], "red")
+    Red subtype resolution: is_bold_red() and is_light_red() search
+      wine["Wine"], wine["Varietal"], and wine["MasterVarietal"].
+    """
+
+    def test_perfect_fit_returns_100(self):
+        # Sparkling in summer → seasonal_score=0 (perfect) → 100.0
+        w = {"Type": "Sparkling"}
+        assert seasonal_fit_score(w, "summer") == pytest.approx(100.0)
+
+    def test_acceptable_fit_returns_50(self):
+        # Sparkling in winter → seasonal_score=1 (acceptable) → 50.0
+        w = {"Type": "Sparkling"}
+        assert seasonal_fit_score(w, "winter") == pytest.approx(50.0)
+
+    def test_poor_fit_returns_0(self):
+        # Bold red (Cabernet Sauvignon) in summer → seasonal_score=2 (poor) → 0.0
+        # is_bold_red() matches "cabernet" in Varietal.
+        w = {"Type": "Red", "Varietal": "Cabernet Sauvignon"}
+        assert seasonal_fit_score(w, "summer") == pytest.approx(0.0)
+
+    def test_red_in_winter_perfect(self):
+        # Any red badge in fall/winter → seasonal_score=0 (perfect) → 100.0
+        # A generic "Red" with no bold/light keywords still returns 0 in winter.
+        w = {"Type": "Red", "Varietal": "Grenache"}
+        assert seasonal_fit_score(w, "winter") == pytest.approx(100.0)
+
+    def test_rose_in_winter_poor(self):
+        # Rosé in winter → seasonal_score=2 (poor) → 0.0
+        # CellarTracker Type for rosé is "Rosé" (with accent).
+        w = {"Type": "Rosé"}
+        assert seasonal_fit_score(w, "winter") == pytest.approx(0.0)
+
+    def test_light_red_in_summer_perfect(self):
+        # Light red (Pinot Noir) in summer → seasonal_score=0 (perfect) → 100.0
+        # is_light_red() matches "pinot noir" in Varietal.
+        w = {"Type": "Red", "Varietal": "Pinot Noir"}
+        assert seasonal_fit_score(w, "summer") == pytest.approx(100.0)
+
+    def test_white_in_summer_perfect(self):
+        # White in summer → seasonal_score=0 (perfect) → 100.0
+        w = {"Type": "White"}
+        assert seasonal_fit_score(w, "summer") == pytest.approx(100.0)
+
+    def test_white_in_winter_acceptable(self):
+        # White in winter → seasonal_score=1 (acceptable) → 50.0
+        w = {"Type": "White"}
+        assert seasonal_fit_score(w, "winter") == pytest.approx(50.0)
+
+    def test_bold_red_keyword_matched_via_wine_name(self):
+        # "barolo" matched in Wine field (not Varietal) → is_bold_red=True
+        # Bold red in summer → seasonal_score=2 (poor) → 0.0
+        w = {"Type": "Red", "Wine": "Barolo Riserva 2018"}
+        assert seasonal_fit_score(w, "summer") == pytest.approx(0.0)

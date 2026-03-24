@@ -21,6 +21,7 @@ if "TZ" in os.environ:
     time.tzset()
 
 from plan_config import EVOLUTION_TRACKS, HOLIDAYS
+from scoring import seasonal_score
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
 
 # ---------------------------------------------------------------------------
@@ -38,24 +39,6 @@ SEASON_PREFER: dict[str, list[str]] = {
     "fall": ["red", "white", "sparkling", "rose"],
     "winter": ["red", "white", "sparkling", "rose"],
 }
-
-# Red varietals that are "light" and acceptable in spring/summer
-LIGHT_RED_KEYWORDS = ["pinot noir", "bardolino", "barbera", "dolcetto", "gamay"]
-
-# Bold red keywords that strongly prefer fall/winter
-BOLD_RED_KEYWORDS = [
-    "cabernet",
-    "syrah",
-    "merlot",
-    "barolo",
-    "bordeaux",
-    "rhône",
-    "rhone",
-    "sangiovese",
-    "nebbiolo",
-    "tempranillo",
-]
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -152,53 +135,6 @@ def max_schedulable(wine: dict) -> int:
     if qty >= 3:
         return max(1, qty - 2)
     return qty
-
-
-def is_bold_red(wine: dict) -> bool:
-    searchable = " ".join(
-        [
-            wine.get("Wine", ""),
-            wine.get("Varietal", ""),
-            wine.get("MasterVarietal", ""),
-        ]
-    ).lower()
-    return any(kw in searchable for kw in BOLD_RED_KEYWORDS)
-
-
-def is_light_red(wine: dict) -> bool:
-    searchable = " ".join(
-        [
-            wine.get("Wine", ""),
-            wine.get("Varietal", ""),
-            wine.get("MasterVarietal", ""),
-        ]
-    ).lower()
-    return any(kw in searchable for kw in LIGHT_RED_KEYWORDS)
-
-
-def seasonal_score(wine: dict, season: str) -> int:
-    """Penalty for scheduling a wine in the wrong season (higher = worse fit).
-
-    0  perfect fit
-    1  acceptable
-    2  poor fit
-    """
-    badge = TYPE_TO_BADGE.get(wine.get("Type", ""), "red")
-    if season in ("spring", "summer"):
-        if badge in ("sparkling", "rose", "white"):
-            return 0
-        if badge == "red" and is_light_red(wine):
-            return 0
-        if badge == "red":
-            return 2 if is_bold_red(wine) else 1
-    else:  # fall, winter
-        if badge == "red":
-            return 0
-        if badge in ("sparkling", "white"):
-            return 1
-        if badge == "rose":
-            return 2
-    return 1
 
 
 # ---------------------------------------------------------------------------
