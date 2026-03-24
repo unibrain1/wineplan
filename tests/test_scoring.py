@@ -16,7 +16,7 @@ Formula reference (from scoring.py):
 
 import pytest
 
-from scoring import seasonal_fit_score, window_position_score
+from scoring import ct_score_component, seasonal_fit_score, window_position_score
 from wine_utils import CURRENT_YEAR
 
 Y = CURRENT_YEAR  # shorthand used throughout
@@ -358,3 +358,49 @@ class TestSeasonalFitMapping:
         # Bold red in summer → seasonal_score=2 (poor) → 0.0
         w = {"Type": "Red", "Wine": "Barolo Riserva 2018"}
         assert seasonal_fit_score(w, "summer") == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# TestCtScoreComponent
+# ---------------------------------------------------------------------------
+
+
+class TestCtScoreComponent:
+    """ct_score_component() normalizes CT ratings to 0–100 via (ct - 80) * 5."""
+
+    def test_ct_80_returns_0(self):
+        assert ct_score_component({"CT": 80}) == pytest.approx(0.0)
+
+    def test_ct_85_returns_25(self):
+        assert ct_score_component({"CT": 85}) == pytest.approx(25.0)
+
+    def test_ct_88_returns_40(self):
+        # 88 is AVG_CT — the default for missing scores
+        assert ct_score_component({"CT": 88}) == pytest.approx(40.0)
+
+    def test_ct_90_returns_50(self):
+        assert ct_score_component({"CT": 90}) == pytest.approx(50.0)
+
+    def test_ct_95_returns_75(self):
+        assert ct_score_component({"CT": 95}) == pytest.approx(75.0)
+
+    def test_ct_100_returns_100(self):
+        assert ct_score_component({"CT": 100}) == pytest.approx(100.0)
+
+    def test_ct_below_80_clamped_to_0(self):
+        assert ct_score_component({"CT": 75}) == pytest.approx(0.0)
+        assert ct_score_component({"CT": 60}) == pytest.approx(0.0)
+
+    def test_ct_above_100_clamped_to_100(self):
+        assert ct_score_component({"CT": 105}) == pytest.approx(100.0)
+
+    def test_ct_none_uses_avg(self):
+        # CT=None → uses AVG_CT=88 → (88-80)*5 = 40.0
+        assert ct_score_component({"CT": None}) == pytest.approx(40.0)
+
+    def test_ct_missing_key_uses_avg(self):
+        # No CT key → .get returns None → uses AVG_CT
+        assert ct_score_component({}) == pytest.approx(40.0)
+
+    def test_return_type_is_float(self):
+        assert isinstance(ct_score_component({"CT": 90}), float)

@@ -5,6 +5,7 @@ Symbols exported:
   window_position_score — drinking-window position score (0–100, higher = schedule sooner)
   seasonal_score        — seasonal fit penalty (0=perfect, 1=acceptable, 2=poor)
   seasonal_fit_score    — seasonal fit as a 0–100 float (higher = better fit)
+  ct_score_component    — CellarTracker quality score normalized to 0–100
 """
 
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE
@@ -132,3 +133,22 @@ SEASONAL_FIT_MAP: dict[int, float] = {0: 100.0, 1: 50.0, 2: 0.0}
 def seasonal_fit_score(wine: dict, season: str) -> float:
     """Return seasonal fit as a 0–100 float (higher = better fit)."""
     return SEASONAL_FIT_MAP[seasonal_score(wine, season)]
+
+
+# ---------------------------------------------------------------------------
+# CT quality scoring
+# ---------------------------------------------------------------------------
+
+AVG_CT = 88.0  # default for wines with no CellarTracker score
+
+
+def ct_score_component(wine: dict) -> float:
+    """Normalize CellarTracker score to 0–100 (higher = better quality).
+
+    Anchors at CT=80 (floor). Wines below 80 score 0; above 100 score 100.
+    Missing CT defaults to AVG_CT (88.0).
+    """
+    ct = wine.get("CT")
+    if ct is None:
+        ct = AVG_CT
+    return max(0.0, min(100.0, float((ct - 80) * 5)))
