@@ -8,6 +8,7 @@ Symbols exported:
   ct_score_component    — CellarTracker quality score normalized to 0–100
   diversity_score       — diversity penalty based on proximity to similar placed wines (0–100)
   diversity_penalty     — linear decay helper for diversity scoring
+  composite_score       — weighted combination of all components (lower = schedule sooner)
 """
 
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE
@@ -204,3 +205,37 @@ def diversity_score(wine: dict, week_index: int, placed: list[dict | None]) -> f
             total_penalty += diversity_penalty(distance, DIV_SAME_VARIETAL)
 
     return max(0.0, 100.0 - total_penalty)
+
+
+# ---------------------------------------------------------------------------
+# Composite score
+# ---------------------------------------------------------------------------
+
+W_WINDOW = 0.50
+W_SEASON = 0.25
+W_DIVERSITY = 0.15
+W_CT = 0.10
+# Weights must sum to 1.0: 0.50 + 0.25 + 0.15 + 0.10 = 1.00
+
+
+def composite_score(
+    wine: dict,
+    season: str,
+    week_index: int,
+    placed: list[dict | None],
+) -> float:
+    """Weighted composite of all scoring components. Lower = schedule sooner.
+
+    Inverts the 0–100 desirability scores so that the most desirable wines
+    (past-peak, perfect season, high diversity, high CT) get the lowest
+    composite score, consistent with urgency_score() convention.
+    """
+    window = window_position_score(wine)
+    seasonal = seasonal_fit_score(wine, season)
+    diversity = diversity_score(wine, week_index, placed)
+    ct = ct_score_component(wine)
+
+    desirability = (
+        W_WINDOW * window + W_SEASON * seasonal + W_DIVERSITY * diversity + W_CT * ct
+    )
+    return 100.0 - desirability

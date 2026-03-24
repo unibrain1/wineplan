@@ -17,6 +17,7 @@ Formula reference (from scoring.py):
 import pytest
 
 from scoring import (
+    composite_score,
     ct_score_component,
     diversity_score,
     seasonal_fit_score,
@@ -564,3 +565,99 @@ class TestDiversityScore:
         w = self._make_wine()
         placed: list[dict | None] = [None] * 52
         assert diversity_score(w, 0, placed) == pytest.approx(100.0)
+
+
+# ---------------------------------------------------------------------------
+# TestCompositeScore
+# ---------------------------------------------------------------------------
+
+
+class TestCompositeScore:
+    """composite_score() combines all four components. Lower = schedule sooner."""
+
+    def _past_peak_wine(self) -> dict:
+        """A past-peak red wine with high CT — should score very low (urgent)."""
+        return {
+            "Wine": "Past Peak Red",
+            "Vintage": "2015",
+            "Type": "Red",
+            "Varietal": "Cabernet Sauvignon",
+            "BeginConsume": Y - 10,
+            "EndConsume": Y - 1,
+            "CT": 95,
+            "Producer": "Producer A",
+        }
+
+    def _in_window_wine(self) -> dict:
+        """A mid-window red with average CT — moderate urgency."""
+        return {
+            "Wine": "Mid Window Red",
+            "Vintage": "2020",
+            "Type": "Red",
+            "Varietal": "Merlot",
+            "BeginConsume": Y - 5,
+            "EndConsume": Y + 5,
+            "CT": 88,
+            "Producer": "Producer B",
+        }
+
+    def _before_window_wine(self) -> dict:
+        """A wine not yet ready — should score high (not urgent)."""
+        return {
+            "Wine": "Young Wine",
+            "Vintage": "2024",
+            "Type": "Red",
+            "Varietal": "Nebbiolo",
+            "BeginConsume": Y + 3,
+            "EndConsume": Y + 15,
+            "CT": 92,
+            "Producer": "Producer C",
+        }
+
+    def test_past_peak_ranks_above_in_window(self):
+        # Past-peak wine should have LOWER composite (more urgent) than in-window
+        placed: list[dict | None] = []
+        past = composite_score(self._past_peak_wine(), "fall", 0, placed)
+        mid = composite_score(self._in_window_wine(), "fall", 0, placed)
+        assert past < mid
+
+    def test_in_window_ranks_above_before_window(self):
+        placed: list[dict | None] = []
+        mid = composite_score(self._in_window_wine(), "fall", 0, placed)
+        young = composite_score(self._before_window_wine(), "fall", 0, placed)
+        assert mid < young
+
+    def test_deterministic(self):
+        # Same inputs must produce identical output
+        w = self._in_window_wine()
+        placed: list[dict | None] = [None] * 10
+        s1 = composite_score(w, "summer", 5, placed)
+        s2 = composite_score(w, "summer", 5, placed)
+        assert s1 == s2
+
+    def test_seasonal_penalty_increases_score(self):
+        # Bold red in summer should score higher (less urgent) than in winter
+        w = self._past_peak_wine()
+        placed: list[dict | None] = []
+        summer_score = composite_score(w, "summer", 0, placed)
+        winter_score = composite_score(w, "winter", 0, placed)
+        assert summer_score > winter_score  # summer = worse fit for bold red
+
+    def test_weights_sum_to_one(self):
+        from scoring import W_CT, W_DIVERSITY, W_SEASON, W_WINDOW
+
+        assert W_WINDOW + W_SEASON + W_DIVERSITY + W_CT == pytest.approx(1.0)
+
+    def test_empty_placed_list(self):
+        # Should work with empty placed list (diversity defaults to 100)
+        w = self._in_window_wine()
+        score = composite_score(w, "fall", 0, [])
+        assert isinstance(score, float)
+        assert 0.0 <= score <= 100.0
+
+    def test_lower_is_more_urgent(self):
+        # Verify the inversion: high-desirability wine gets LOW composite score
+        # Past-peak + perfect season + high CT = very desirable = low score
+        w = self._past_peak_wine()
+        score = composite_score(w, "winter", 0, [])
+        assert score < 50.0  # should be well below midpoint

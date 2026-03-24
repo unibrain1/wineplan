@@ -43,7 +43,7 @@ scripts/
   plan_config.py              — Holidays + evolution tracks (gitignored, personal)
   plan_config.py.sample       — Template for plan_config.py
   wine_utils.py               — Shared: CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
-  scoring.py                  — Composite scoring: window_position_score, seasonal_fit_score, seasonal_score
+  scoring.py                  — Composite scoring: composite_score, window/seasonal/diversity/CT components
   generate_plan.py            — Deterministic plan generator (rules-based)
   generate_notes.py           — Tasting notes (Claude CLI, augmented with CT notes/food tags)
   wine_keywords.py            — Single source of truth for food keywords and pairing rules
