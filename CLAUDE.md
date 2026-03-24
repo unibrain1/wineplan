@@ -36,6 +36,8 @@ PUBLISH (atomic — site always has complete plan with notes)
 site/                         — Served by nginx (data + presentation + style separated)
   index.html                  — App shell (HTML structure + JS rendering logic)
   style.css                   — All CSS styles (Sandstone color scheme)
+  picklist.html               — Standalone picklist view
+  picklist.css                — Picklist styles
   plan.json                   — Plan data: allWeeks, quarterInfo, changelog (generated)
   pairing_suggestions.json    — Pairing suggestions (generated)
   report.json                 — Inventory diff report (generated)
@@ -51,11 +53,16 @@ scripts/
   parse_menu.py               — menu.ics → menu.json (Google Calendar .ics feed)
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
+tests/
+  test_scoring.py             — Unit tests for all scoring components
 docs/
   menu-guide.md               — How to write menu entries for best pairing results
+plans/                        — Design specs and algorithm proposals (gitignored)
 data/                         — Staging area + generated artifacts (gitignored)
   plan.json                   — Staged plan (copied to site/ after notes generated)
   plan_previous.json          — Backup of previous live plan (for changelog diff)
+conftest.py                   — pytest config: adds scripts/ to sys.path
+pyrightconfig.json            — Pyright type checking config
 pipeline.sh                   — Shared pipeline logic (sourced by fetch.sh and fetch_docker.sh)
 fetch.sh                      — Local pipeline entry point
 fetch_docker.sh               — Docker pipeline entry point
@@ -73,6 +80,14 @@ requirements.txt              — Python dependencies (icalendar)
 ```bash
 bash fetch.sh
 ```
+
+## Running Tests
+
+```bash
+python3 -m pytest tests/ -v
+```
+
+Tests require `pytest` (install via `pip install pytest`). The `conftest.py` at project root adds `scripts/` to `sys.path`. Pyright is configured to exclude `tests/` (see `pyrightconfig.json`).
 
 ## Docker Deployment
 
@@ -167,4 +182,4 @@ Implemented in `scripts/generate_plan.py`:
 - Plan is regenerated from scratch every pipeline run — no manual editing of `plan.json`
 - Plan staged to `data/plan.json`, only published to `site/` when complete with notes
 - Shared utilities in `scripts/wine_utils.py` — do not duplicate `urgency_score`, `normalize`, `TYPE_TO_BADGE`, or `CURRENT_YEAR` in individual scripts
-- Composite scoring functions in `scripts/scoring.py` — imports `CURRENT_YEAR` from `wine_utils`
+- Composite scoring in `scripts/scoring.py` — `composite_score()` combines window position (50%), seasonal fit (25%), diversity (15%), CT quality (10%). Lower score = schedule sooner. Also owns `seasonal_score()` and red-subtype helpers (moved from `generate_plan.py` to avoid circular imports)
