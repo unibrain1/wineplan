@@ -6,6 +6,8 @@ Symbols exported:
   seasonal_score        — seasonal fit penalty (0=perfect, 1=acceptable, 2=poor)
   seasonal_fit_score    — seasonal fit as a 0–100 float (higher = better fit)
   ct_score_component    — CellarTracker quality score normalized to 0–100
+  diversity_score       — diversity penalty based on proximity to similar placed wines (0–100)
+  diversity_penalty     — linear decay helper for diversity scoring
 """
 
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE
@@ -152,3 +154,53 @@ def ct_score_component(wine: dict) -> float:
     if ct is None:
         ct = AVG_CT
     return max(0.0, min(100.0, float((ct - 80) * 5)))
+
+
+# ---------------------------------------------------------------------------
+# Diversity scoring
+# ---------------------------------------------------------------------------
+
+DIV_SAME_WINE = 60
+DIV_SAME_PRODUCER = 35
+DIV_SAME_VARIETAL = 20
+DIV_DECAY_WEEKS = 5
+
+
+def diversity_penalty(distance_weeks: int, max_penalty: float) -> float:
+    """Linear decay: full penalty at distance 0, zero at DIV_DECAY_WEEKS."""
+    if distance_weeks >= DIV_DECAY_WEEKS:
+        return 0.0
+    return max_penalty * (1.0 - distance_weeks / DIV_DECAY_WEEKS)
+
+
+def diversity_score(wine: dict, week_index: int, placed: list[dict | None]) -> float:
+    """Return 0–100, where 100 = maximum diversity (no penalty).
+
+    Looks back up to DIV_DECAY_WEEKS slots in placed[]. For each nearby
+    placed wine, applies the strongest matching penalty tier (same wine >
+    same producer > same varietal). Penalties accumulate across multiple
+    nearby wines but only the strongest tier fires per comparison.
+    """
+    total_penalty = 0.0
+    wine_key = f"{wine.get('Vintage', '')}|{wine.get('Wine', '')}"
+    wine_producer = wine.get("Producer", "")
+    wine_varietal = wine.get("MasterVarietal") or wine.get("Varietal", "")
+
+    for prev_idx in range(max(0, week_index - DIV_DECAY_WEEKS), week_index):
+        prev = placed[prev_idx]
+        if prev is None:
+            continue
+        distance = week_index - prev_idx
+        prev_key = f"{prev.get('Vintage', '')}|{prev.get('Wine', '')}"
+        prev_producer = prev.get("Producer", "")
+        prev_varietal = prev.get("MasterVarietal") or prev.get("Varietal", "")
+
+        # Only the strongest matching penalty per comparison
+        if wine_key == prev_key:
+            total_penalty += diversity_penalty(distance, DIV_SAME_WINE)
+        elif wine_producer and wine_producer == prev_producer:
+            total_penalty += diversity_penalty(distance, DIV_SAME_PRODUCER)
+        elif wine_varietal and wine_varietal == prev_varietal:
+            total_penalty += diversity_penalty(distance, DIV_SAME_VARIETAL)
+
+    return max(0.0, 100.0 - total_penalty)

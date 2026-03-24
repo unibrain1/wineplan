@@ -16,7 +16,12 @@ Formula reference (from scoring.py):
 
 import pytest
 
-from scoring import ct_score_component, seasonal_fit_score, window_position_score
+from scoring import (
+    ct_score_component,
+    diversity_score,
+    seasonal_fit_score,
+    window_position_score,
+)
 from wine_utils import CURRENT_YEAR
 
 Y = CURRENT_YEAR  # shorthand used throughout
@@ -404,3 +409,158 @@ class TestCtScoreComponent:
 
     def test_return_type_is_float(self):
         assert isinstance(ct_score_component({"CT": 90}), float)
+
+
+# ---------------------------------------------------------------------------
+# TestDiversityScore
+# ---------------------------------------------------------------------------
+
+
+class TestDiversityScore:
+    """diversity_score() penalizes proximity to similar wines in placed[]."""
+
+    def _make_wine(
+        self,
+        name: str = "Wine A",
+        vintage: str = "2020",
+        producer: str = "Producer A",
+        varietal: str = "Cabernet Sauvignon",
+    ) -> dict:
+        return {
+            "Wine": name,
+            "Vintage": vintage,
+            "Producer": producer,
+            "Varietal": varietal,
+        }
+
+    def test_no_placed_wines_returns_100(self):
+        # Empty placed list → no penalty → 100.0
+        w = self._make_wine()
+        assert diversity_score(w, 0, []) == pytest.approx(100.0)
+
+    def test_all_none_slots_returns_100(self):
+        placed: list[dict | None] = [None] * 10
+        w = self._make_wine()
+        assert diversity_score(w, 5, placed) == pytest.approx(100.0)
+
+    def test_same_wine_adjacent(self):
+        # Same wine 1 week ago: penalty = 60 * (1 - 1/5) = 48
+        # Score = 100 - 48 = 52
+        w = self._make_wine()
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine()  # same wine at index 4
+        assert diversity_score(w, 5, placed) == pytest.approx(52.0)
+
+    def test_same_wine_at_decay_boundary(self):
+        # Same wine exactly 5 weeks ago: distance == DIV_DECAY_WEEKS → 0 penalty
+        w = self._make_wine()
+        placed: list[dict | None] = [None] * 10
+        placed[0] = self._make_wine()
+        assert diversity_score(w, 5, placed) == pytest.approx(100.0)
+
+    def test_same_wine_at_4_weeks(self):
+        # Same wine 4 weeks ago: penalty = 60 * (1 - 4/5) = 12
+        # Score = 100 - 12 = 88
+        w = self._make_wine()
+        placed: list[dict | None] = [None] * 10
+        placed[1] = self._make_wine()
+        assert diversity_score(w, 5, placed) == pytest.approx(88.0)
+
+    def test_same_producer_adjacent(self):
+        # Same producer, different wine, 1 week ago: penalty = 35 * (1 - 1/5) = 28
+        # Score = 100 - 28 = 72
+        w = self._make_wine(name="Wine B")
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine(name="Wine A")  # same producer
+        assert diversity_score(w, 5, placed) == pytest.approx(72.0)
+
+    def test_same_varietal_adjacent(self):
+        # Same varietal, different wine+producer, 1 week ago: penalty = 20 * (1 - 1/5) = 16
+        # Score = 100 - 16 = 84
+        w = self._make_wine(name="Wine B", vintage="2021", producer="Producer B")
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine(
+            name="Wine A", vintage="2020", producer="Producer A"
+        )
+        assert diversity_score(w, 5, placed) == pytest.approx(84.0)
+
+    def test_tier_priority_same_wine_beats_producer(self):
+        # Same wine match should fire same-wine penalty (60), NOT producer (35)
+        w = self._make_wine()
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine()  # same wine AND same producer
+        score = diversity_score(w, 5, placed)
+        # If same-wine fires: 100 - 60*(1-1/5) = 52
+        # If producer fired instead: 100 - 35*(1-1/5) = 72
+        assert score == pytest.approx(52.0)
+
+    def test_tier_priority_producer_beats_varietal(self):
+        # Same producer match should fire producer penalty (35), NOT varietal (20)
+        w = self._make_wine(name="Wine B")
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine(name="Wine A")  # diff wine, same producer+varietal
+        score = diversity_score(w, 5, placed)
+        assert score == pytest.approx(72.0)  # producer penalty, not varietal
+
+    def test_penalties_accumulate_across_slots(self):
+        # Two same-varietal wines at distances 1 and 3
+        # Penalty1 = 20 * (1 - 1/5) = 16, Penalty2 = 20 * (1 - 3/5) = 8
+        # Total = 24, score = 76
+        w = self._make_wine(name="Wine C", producer="Producer C")
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine(name="Wine A", producer="Producer A")  # 1 week ago
+        placed[2] = self._make_wine(name="Wine B", producer="Producer B")  # 3 weeks ago
+        assert diversity_score(w, 5, placed) == pytest.approx(76.0)
+
+    def test_missing_producer_skips_producer_penalty(self):
+        # Wine with no Producer: should not match on producer tier
+        w = self._make_wine(name="Wine B", vintage="2021", producer="")
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine(
+            name="Wine A", vintage="2020", producer="Producer A"
+        )
+        # No same-wine, no producer match (empty), check varietal match
+        # Same varietal → penalty = 20 * (1 - 1/5) = 16, score = 84
+        assert diversity_score(w, 5, placed) == pytest.approx(84.0)
+
+    def test_missing_varietal_skips_varietal_penalty(self):
+        # Wine with no Varietal or MasterVarietal: should not match on varietal
+        w = {"Wine": "Wine B", "Vintage": "2020", "Producer": "Producer B"}
+        placed: list[dict | None] = [None] * 10
+        placed[4] = self._make_wine()
+        # Different wine, different producer, no varietal to match → no penalty
+        assert diversity_score(w, 5, placed) == pytest.approx(100.0)
+
+    def test_master_varietal_fallback(self):
+        # MasterVarietal takes priority over Varietal for matching
+        w = {
+            "Wine": "Wine B",
+            "Vintage": "2021",
+            "Producer": "Producer B",
+            "MasterVarietal": "Cab Blend",
+            "Varietal": "Cabernet Sauvignon",
+        }
+        placed: list[dict | None] = [None] * 10
+        placed[4] = {
+            "Wine": "Wine A",
+            "Vintage": "2020",
+            "Producer": "Producer A",
+            "MasterVarietal": "Cab Blend",
+            "Varietal": "Merlot",
+        }
+        # MasterVarietal matches ("Cab Blend"), Varietal differs
+        # penalty = 20 * (1 - 1/5) = 16, score = 84
+        assert diversity_score(w, 5, placed) == pytest.approx(84.0)
+
+    def test_score_never_negative(self):
+        # Many same-wine placements should floor at 0, not go negative
+        w = self._make_wine()
+        placed: list[dict | None] = [self._make_wine() for _ in range(5)]
+        score = diversity_score(w, 5, placed)
+        assert score >= 0.0
+
+    def test_week_index_0_no_lookback(self):
+        # At week 0, there's nothing to look back at
+        w = self._make_wine()
+        placed: list[dict | None] = [None] * 52
+        assert diversity_score(w, 0, placed) == pytest.approx(100.0)
