@@ -10,7 +10,7 @@ The "adjusted" change type is retired. This test suite covers the retired
 behavior as regression anchors as well as the new set-difference behavior.
 
 Mock strategy: plan_config must be injected into sys.modules before importing
-generate_plan because generate_plan imports plan_config at module level (line 23).
+generate_plan because generate_plan imports plan_config at module level.
 """
 
 import sys
