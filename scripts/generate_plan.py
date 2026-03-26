@@ -493,28 +493,14 @@ def diff_plans(old_weeks: list[dict], new_weeks: list[dict]) -> list[dict]:
         vintage, name = key.split("|", 1)
         label = f"{vintage} {name}"
 
-        if not old_weeks_list and new_weeks_list:
-            for wk in new_weeks_list:
-                changes.append(
-                    {"type": "added", "week": wk, "description": f"{label} added"}
-                )
-        elif old_weeks_list and not new_weeks_list:
-            for wk in old_weeks_list:
-                changes.append(
-                    {"type": "removed", "week": wk, "description": f"{label} removed"}
-                )
-        else:
-            old_sorted = sorted(old_weeks_list)
-            new_sorted = sorted(new_weeks_list)
-            if old_sorted != new_sorted:
-                changes.append(
-                    {
-                        "type": "adjusted",
-                        "description": (
-                            f"{label} moved from week(s) {old_sorted} to {new_sorted}"
-                        ),
-                    }
-                )
+        for wk in sorted(set(old_weeks_list) - set(new_weeks_list)):
+            changes.append(
+                {"type": "removed", "week": wk, "description": f"{label} removed"}
+            )
+        for wk in sorted(set(new_weeks_list) - set(old_weeks_list)):
+            changes.append(
+                {"type": "added", "week": wk, "description": f"{label} added"}
+            )
 
     return changes
 
@@ -924,11 +910,10 @@ def main() -> None:
 
     added = sum(1 for c in changelog["changes"] if c["type"] == "added")
     removed = sum(1 for c in changelog["changes"] if c["type"] == "removed")
-    adjusted = sum(1 for c in changelog["changes"] if c["type"] == "adjusted")
 
     print(f"Plan written to {plan_path}")
     print(f"  {len(plan_data['allWeeks'])} weeks scheduled")
-    print(f"  Changelog: +{added} added, -{removed} removed, ~{adjusted} adjusted")
+    print(f"  Changelog: +{added} added, -{removed} removed")
 
 
 if __name__ == "__main__":

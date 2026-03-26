@@ -277,7 +277,7 @@ function renderChangelog() {
   // Table
   var table = document.createElement('table');
   table.className = 'changelog-table';
-  table.innerHTML = '<thead><tr><th>Date</th><th>Added</th><th>Removed</th><th>Adjusted</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Date</th><th>Added</th><th>Removed</th></tr></thead>';
   var tbody = document.createElement('tbody');
 
   history.forEach(function(entry) {
@@ -291,7 +291,6 @@ function renderChangelog() {
 
     tr.appendChild(renderChangeCell(entry.changes, 'added'));
     tr.appendChild(renderChangeCell(entry.changes, 'removed'));
-    tr.appendChild(renderChangeCell(entry.changes, 'adjusted'));
 
     tbody.appendChild(tr);
   });
