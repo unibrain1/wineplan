@@ -49,6 +49,9 @@ fi
 log "==> Resolving credentials from 1Password..."
 CT_USERNAME=$(op read "$USERNAME") || { log "ERROR: Failed to resolve CellarTracker username from 1Password"; exit 1; }
 CT_PASSWORD=$(op read "$PASSWORD") || { log "ERROR: Failed to resolve CellarTracker password from 1Password"; exit 1; }
+GOOGLE_CALENDAR_ICS_URL=$(op read "$GOOGLE_CALENDAR_ICS_URL") || { log "ERROR: Failed to resolve Google Calendar URL from 1Password"; exit 1; }
+export CLAUDE_CODE_OAUTH_TOKEN
+CLAUDE_CODE_OAUTH_TOKEN=$(op read "$CLAUDE_CODE_OAUTH_TOKEN") || { log "WARNING: Failed to resolve Claude OAuth token from 1Password"; }
 
 CT_BASE="https://www.cellartracker.com/xlquery.asp?User=${CT_USERNAME}&Password=${CT_PASSWORD}&Format=tab"
 
