@@ -5,6 +5,40 @@ set -euo pipefail
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
 
+# --- HEALTHCHECKS.IO ---
+HC_PING_SLUG="the-sommelier"
+HC_PING_URL=""
+
+if [[ -n "${HEALTHCHECK_PING_KEY:-}" ]]; then
+  if HC_RESOLVED=$(op read "${HEALTHCHECK_PING_KEY}" 2>/dev/null); then
+    HC_PING_URL="https://hc-ping.com/${HC_RESOLVED}/${HC_PING_SLUG}"
+  else
+    log "WARNING: Failed to resolve Healthchecks.io ping key from 1Password"
+  fi
+fi
+
+hc_ping() {
+  local status="$1"
+  local message="$2"
+
+  if [[ -z "${HC_PING_URL}" ]]; then
+    return 0
+  fi
+
+  local ping_url="${HC_PING_URL}"
+  if [[ "${status}" == "FAILED" ]]; then
+    ping_url="${HC_PING_URL}/fail"
+  fi
+
+  curl -sf --retry 3 --max-time 5 \
+    -X POST \
+    --data-raw "${message}" \
+    "${ping_url}" >/dev/null 2>&1 || log "WARNING: Failed to send Healthchecks.io ping"
+}
+
+# Send failure ping on any non-zero exit
+trap 'hc_ping "FAILED" "Pipeline failed. Check container logs for details."' ERR
+
 # --- SELF-UPDATE ---
 if [ -d .git ]; then
   log "==> Pulling latest from git..."
@@ -77,3 +111,12 @@ cp data/pairing_suggestions.json site/pairing_suggestions.json
 cp data/report.json site/report.json
 
 log "==> Sync complete."
+
+# --- HEALTHCHECK PING (success) ---
+BOTTLES=$(python3 -c "import json; d=json.load(open('data/report.json')); print(d['summary']['inventory_total_bottles'])" 2>/dev/null || echo "?")
+PLANNED=$(python3 -c "import json; d=json.load(open('data/plan.json')); print(len(d['allWeeks']))" 2>/dev/null || echo "?")
+hc_ping "SUCCESS" "Pipeline completed successfully.
+
+Bottles: ${BOTTLES}
+Weeks planned: ${PLANNED}
+Time: $(date '+%Y-%m-%d %H:%M:%S')"
