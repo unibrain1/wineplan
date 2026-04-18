@@ -147,6 +147,30 @@ def apply_default_windows(inventory: list[dict]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Week lookup
+# ---------------------------------------------------------------------------
+
+
+def find_current_week(all_weeks: list[dict], target: date | None = None) -> dict | None:
+    """Find the plan week containing the target date (default: today).
+
+    Returns None if no matching week is found.
+    """
+    from datetime import datetime, timedelta
+
+    target = target or date.today()
+    for week in all_weeks:
+        raw = week.get("date", "")
+        try:
+            week_monday = datetime.strptime(raw, "%b %d, %Y").date()
+        except ValueError:
+            continue
+        if week_monday <= target < week_monday + timedelta(days=7):
+            return week
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Claude CLI helpers (shared by generate_notes.py and enrich_menu.py)
 # ---------------------------------------------------------------------------
 

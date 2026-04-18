@@ -32,6 +32,11 @@ COMPARE & PAIR (scripted, enriched-first fallback to keywords)
 
 PUBLISH (atomic — site always has complete plan with notes)
   └── Copy plan.json + pairing_suggestions.json + report.json → site/
+
+GENERATE DIGEST → site/digest.json + site/digest.html (only when menu exists for today)
+
+SEND DIGEST (separate 8am cron via supercronic)
+  └── Gmail SMTP → configured recipients (idempotent, skips routine days)
 ```
 
 ## Directory Structure
@@ -57,6 +62,8 @@ scripts/
   parse_consumed.py           — consumed.tsv → consumed.json (consumption history)
   fetch_community_notes.py    — RSS feed → community_notes.json (cumulative cache, deduped by iNote)
   enrich_menu.py              — LLM extraction of structured food features → menu_enriched.json (hash-keyed cache)
+  generate_digest.py          — Morning digest: tonight's wine + menu pairings → digest.json + digest.html
+  send_digest.py              — Send digest via Gmail SMTP (--dry-run, --force, idempotent)
   parse_menu.py               — menu.ics → menu.json (Google Calendar .ics feed)
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
@@ -72,6 +79,7 @@ data/                         — Staging area + generated artifacts (gitignored
   community_notes.json        — Cumulative community tasting notes cache (from RSS, keyed by iWine)
   menu_enriched.json          — LLM enrichment cache (keyed by text hash, persists across runs)
   menu_enriched_full.json     — Full enriched menu with all entries (regenerated each run)
+  digest_last_sent.txt        — Idempotency state file for send_digest.py (date of last send)
 conftest.py                   — pytest config: adds scripts/ to sys.path
 pyrightconfig.json            — Pyright type checking config
 pipeline.sh                   — Shared pipeline logic (sourced by fetch.sh and fetch_docker.sh)

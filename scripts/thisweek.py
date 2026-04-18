@@ -9,26 +9,9 @@ Output: the matching allWeeks entry as JSON to stdout.
 import argparse
 import json
 import sys
-from datetime import date, datetime, timedelta
 from pathlib import Path
 
-
-def find_current_week(all_weeks: list[dict]) -> dict:
-    """Return the week entry that contains today, or the first entry as fallback."""
-    today = date.today()
-
-    for week in all_weeks:
-        raw = week.get("date", "")
-        try:
-            week_monday = datetime.strptime(raw, "%b %d, %Y").date()
-        except ValueError:
-            continue
-        # The week spans Monday through Sunday (7 days)
-        if week_monday <= today < week_monday + timedelta(days=7):
-            return week
-
-    # Fallback: return the first entry
-    return all_weeks[0]
+from wine_utils import find_current_week
 
 
 def main() -> None:
@@ -49,7 +32,7 @@ def main() -> None:
         print("Error: allWeeks is empty", file=sys.stderr)
         sys.exit(1)
 
-    entry = find_current_week(all_weeks)
+    entry = find_current_week(all_weeks) or all_weeks[0]
     json.dump(entry, sys.stdout, indent=2, ensure_ascii=False)
     print()  # trailing newline
 

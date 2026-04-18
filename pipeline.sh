@@ -53,6 +53,9 @@ GOOGLE_CALENDAR_ICS_URL=$(op read "$GOOGLE_CALENDAR_ICS_URL") || { log "ERROR: F
 export CLAUDE_CODE_OAUTH_TOKEN
 CLAUDE_CODE_OAUTH_TOKEN=$(op read "$CLAUDE_CODE_OAUTH_TOKEN") || { log "WARNING: Failed to resolve Claude OAuth token from 1Password"; }
 CT_COMMUNITY_NOTES_RSS=$(op read "$CT_COMMUNITY_NOTES_RSS") || { log "WARNING: Failed to resolve community notes RSS URL from 1Password — continuing without community notes"; }
+export SMTP_USERNAME SMTP_PASSWORD DIGEST_RECIPIENTS
+SMTP_USERNAME=$(op read "$SMTP_USERNAME") || { log "WARNING: Failed to resolve SMTP username — digest email disabled"; }
+SMTP_PASSWORD=$(op read "$SMTP_PASSWORD") || { log "WARNING: Failed to resolve SMTP password — digest email disabled"; }
 
 CT_BASE="https://www.cellartracker.com/xlquery.asp?User=${CT_USERNAME}&Password=${CT_PASSWORD}&Format=tab"
 
@@ -162,6 +165,10 @@ if [[ -n "${HA_SSH_TARGET:-}" ]] && [[ -f "${HA_SSH_KEY}" ]]; then
 else
   log "    Skipping Home Assistant push — HA_SSH_TARGET or SSH key not configured"
 fi
+
+# --- GENERATE DIGEST ---
+log "==> Generating morning digest..."
+python3 scripts/generate_digest.py || { RC=$?; if [ "$RC" -eq 2 ]; then log "    Digest: nothing to send (routine day)"; else log "WARNING: Digest generation failed"; fi; }
 
 log "==> Sync complete."
 
