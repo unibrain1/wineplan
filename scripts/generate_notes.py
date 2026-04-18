@@ -12,9 +12,10 @@ Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv] [community_notes
 
 import csv
 import json
-import subprocess
 import sys
 from pathlib import Path
+
+from wine_utils import call_claude, extract_json
 
 BATCH_SIZE = 20  # bottles per Claude call to stay within context
 
@@ -162,40 +163,6 @@ Return ONLY a JSON object mapping week numbers to notes, like:
 
 Wines:
 {bottle_list}"""
-
-
-def call_claude(prompt: str) -> str:
-    """Call Claude CLI with a prompt and return the response."""
-    try:
-        result = subprocess.run(
-            ["claude", "--print", "--model", "haiku", prompt],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        print("WARNING: Claude CLI timed out", file=sys.stderr)
-        return ""
-    if result.returncode != 0:
-        print(
-            f"WARNING: Claude CLI returned {result.returncode}: {result.stderr}",
-            file=sys.stderr,
-        )
-        return ""
-    return result.stdout.strip()
-
-
-def extract_json(text: str) -> dict:
-    """Extract JSON object from Claude's response."""
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
-        return {}
-    try:
-        return json.loads(text[start:end])
-    except json.JSONDecodeError:
-        print("WARNING: Could not parse Claude response as JSON", file=sys.stderr)
-        return {}
 
 
 def generate_notes(

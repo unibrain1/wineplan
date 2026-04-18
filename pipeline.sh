@@ -125,8 +125,16 @@ fi
 log "==> Comparing inventory vs plan..."
 python3 scripts/compare.py data/inventory.json data/plan.json > data/report.json || { log "ERROR: Compare failed"; exit 1; }
 
+# --- ENRICH MENU (LLM — Claude Code CLI) ---
+if command -v claude &> /dev/null; then
+  log "==> Enriching menu entries (Claude)..."
+  python3 scripts/enrich_menu.py data/menu.json data/menu_enriched.json data/menu_enriched_full.json || log "WARNING: Menu enrichment failed — pairing will use keyword matching only"
+else
+  log "    Skipping menu enrichment — claude CLI not available"
+fi
+
 log "==> Generating pairing suggestions..."
-python3 scripts/pairing.py data/menu.json data/plan.json data/inventory.json > data/pairing_suggestions.json || { log "ERROR: Pairing failed"; exit 1; }
+python3 scripts/pairing.py data/menu.json data/plan.json data/inventory.json data/menu_enriched_full.json > data/pairing_suggestions.json || { log "ERROR: Pairing failed"; exit 1; }
 
 # --- PUBLISH atomically (site always has a complete plan with notes) ---
 log "==> Publishing to site/..."

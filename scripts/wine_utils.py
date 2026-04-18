@@ -5,12 +5,17 @@ Symbols exported:
   CURRENT_YEAR      — current calendar year
   PRO_SCORE_FIELDS  — professional critic score field names
   TYPE_TO_BADGE     — CellarTracker Type → plan badge mapping
-  normalize     — canonical name normalizer (accent-aware)
-  urgency_score — bottle urgency priority (0 = most urgent)
+  normalize         — canonical name normalizer (accent-aware)
+  urgency_score     — bottle urgency priority (0 = most urgent)
+  call_claude       — invoke Claude CLI with a prompt
+  extract_json      — extract JSON object from LLM text response
 """
 
+import json
 import os
 import re
+import subprocess
+import sys
 import time
 from datetime import date
 
@@ -139,3 +144,42 @@ def apply_default_windows(inventory: list[dict]) -> int:
         count += 1
 
     return count
+
+
+# ---------------------------------------------------------------------------
+# Claude CLI helpers (shared by generate_notes.py and enrich_menu.py)
+# ---------------------------------------------------------------------------
+
+
+def call_claude(prompt: str) -> str:
+    """Call Claude CLI with a prompt and return the response."""
+    try:
+        result = subprocess.run(
+            ["claude", "--print", "--model", "haiku", prompt],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        print("WARNING: Claude CLI timed out", file=sys.stderr)
+        return ""
+    if result.returncode != 0:
+        print(
+            f"WARNING: Claude CLI returned {result.returncode}: {result.stderr}",
+            file=sys.stderr,
+        )
+        return ""
+    return result.stdout.strip()
+
+
+def extract_json(text: str) -> dict:
+    """Extract JSON object from Claude's response."""
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start == -1 or end == 0:
+        return {}
+    try:
+        return json.loads(text[start:end])
+    except json.JSONDecodeError:
+        print("WARNING: Could not parse Claude response as JSON", file=sys.stderr)
+        return {}

@@ -14,7 +14,15 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from wine_keywords import PAIRING_RULES
+from wine_keywords import (
+    ENRICHED_ACIDITY_RULES,
+    ENRICHED_CUISINE_RULES,
+    ENRICHED_PREPARATION_RULES,
+    ENRICHED_PROTEIN_RULES,
+    ENRICHED_RICHNESS_RULES,
+    ENRICHED_SPICE_RULES,
+    PAIRING_RULES,
+)
 from wine_utils import CURRENT_YEAR, urgency_score
 
 
@@ -150,6 +158,65 @@ def find_best_bottle(
     return result
 
 
+def score_enriched_pairing(wine_name: str, enriched: dict) -> dict | None:
+    """Score a wine against enriched food features. Returns None if no signal."""
+    wine_lower = wine_name.lower()
+    matches = 0
+    mismatches = 0
+    signals = 0
+    suggested_styles: list[str] = []
+
+    def _check(rules: dict[str, list[str]], value: str | None) -> None:
+        nonlocal matches, mismatches, signals
+        if not value or value not in rules:
+            return
+        signals += 1
+        preferred = rules[value]
+        if any(style in wine_lower for style in preferred):
+            matches += 1
+        else:
+            mismatches += 1
+            suggested_styles.extend(preferred[:3])
+
+    _check(ENRICHED_PROTEIN_RULES, enriched.get("protein"))
+    _check(ENRICHED_PREPARATION_RULES, enriched.get("preparation"))
+    _check(ENRICHED_RICHNESS_RULES, enriched.get("richness"))
+    _check(ENRICHED_SPICE_RULES, enriched.get("spice_heat"))
+    _check(ENRICHED_ACIDITY_RULES, enriched.get("acidity"))
+    _check(ENRICHED_CUISINE_RULES, enriched.get("cuisine"))
+
+    if signals == 0:
+        return None
+
+    # Determine confidence based on number of signals
+    if signals >= 4:
+        confidence = "high"
+    elif signals >= 2:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    if matches > 0 and mismatches == 0:
+        return {
+            "score": "good",
+            "confidence": confidence,
+            "details": f"wine matches enriched food profile ({matches}/{signals} features)",
+        }
+    if mismatches > 0 and matches == 0:
+        return {
+            "score": "poor",
+            "confidence": confidence,
+            "details": f"wine doesn't match enriched profile ({mismatches}/{signals} features)",
+            "suggested_styles": list(dict.fromkeys(suggested_styles)),
+        }
+    return {
+        "score": "partial",
+        "confidence": confidence,
+        "details": f"matches {matches}/{signals} enriched features",
+        "suggested_styles": list(dict.fromkeys(suggested_styles)),
+    }
+
+
 def score_pairing(wine_name: str, keywords: list[str]) -> dict:
     """Score how well a wine pairs with menu keywords."""
     wine_lower = wine_name.lower()
@@ -186,13 +253,28 @@ def score_pairing(wine_name: str, keywords: list[str]) -> dict:
     }
 
 
+def _build_enriched_index(enriched: list[dict]) -> dict[str, dict]:
+    """Build a date+meal → enriched features index."""
+    index: dict[str, dict] = {}
+    for entry in enriched:
+        enriched_data = entry.get("enriched")
+        if enriched_data:
+            key = f"{entry.get('date', '')}|{entry.get('meal', '')}"
+            index[key] = enriched_data
+    return index
+
+
 def suggest_pairings(
-    menu: list[dict], plan: list[dict], inventory: list[dict]
+    menu: list[dict],
+    plan: list[dict],
+    inventory: list[dict],
+    enriched: list[dict] | None = None,
 ) -> list[dict]:
     """Generate pairing suggestions for weeks with menu entries."""
     # Precompute indexes for O(1) lookups
     week_index = build_week_index(plan)
     precompute_searchable(inventory)
+    enriched_index = _build_enriched_index(enriched) if enriched else {}
 
     suggestions = []
     planned_wines = {}
@@ -215,23 +297,6 @@ def suggest_pairings(
             )
             continue
 
-        if not entry["keywords"]:
-            suggestions.append(
-                {
-                    "date": entry["date"],
-                    "meal": entry["meal"],
-                    "planned_wine": week.get("name", ""),
-                    "planned_vintage": week.get("vintage", ""),
-                    "planned_badge": week.get("badge", "red"),
-                    "status": "no_keywords",
-                    "pairing": {
-                        "score": "neutral",
-                        "details": "no match — enjoy the planned wine",
-                    },
-                }
-            )
-            continue
-
         # Look up varietal from inventory to improve pairing score accuracy
         inv_varietal = ""
         week_vintage = str(week.get("vintage", ""))
@@ -246,7 +311,34 @@ def suggest_pairings(
         wine_name = (
             f"{week.get('name', '')} {week.get('appellation', '')} {inv_varietal}"
         )
-        pairing = score_pairing(wine_name, entry["keywords"])
+
+        # Enriched-first fallback: try enriched features, then keyword matching
+        enriched_key = f"{entry['date']}|{entry['meal']}"
+        enriched_data = enriched_index.get(enriched_key)
+        pairing = None
+        if enriched_data:
+            pairing = score_enriched_pairing(wine_name, enriched_data)
+
+        if pairing is None:
+            if not entry["keywords"]:
+                suggestions.append(
+                    {
+                        "date": entry["date"],
+                        "meal": entry["meal"],
+                        "planned_wine": week.get("name", ""),
+                        "planned_vintage": week.get("vintage", ""),
+                        "planned_badge": week.get("badge", "red"),
+                        "status": "no_keywords",
+                        "pairing": {
+                            "score": "neutral",
+                            "confidence": "low",
+                            "details": "no match — enjoy the planned wine",
+                        },
+                    }
+                )
+                continue
+            pairing = score_pairing(wine_name, entry["keywords"])
+            pairing.setdefault("confidence", "medium")
 
         result = {
             "date": entry["date"],
@@ -278,7 +370,7 @@ def suggest_pairings(
 def main():
     if len(sys.argv) < 4:
         print(
-            "Usage: pairing.py <menu.json> <plan.json> <inventory.json>",
+            "Usage: pairing.py <menu.json> <plan.json> <inventory.json> [menu_enriched.json]",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -292,7 +384,16 @@ def main():
     )
     inventory = json.loads(Path(sys.argv[3]).read_text())
 
-    suggestions = suggest_pairings(menu, plan, inventory)
+    enriched = None
+    if len(sys.argv) > 4:
+        enriched_path = Path(sys.argv[4])
+        if enriched_path.exists() and enriched_path.stat().st_size > 0:
+            try:
+                enriched = json.loads(enriched_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"WARNING: Could not load enriched menu: {e}", file=sys.stderr)
+
+    suggestions = suggest_pairings(menu, plan, inventory, enriched)
 
     result = {
         "generated": date.today().isoformat(),

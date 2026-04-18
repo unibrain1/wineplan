@@ -375,3 +375,72 @@ PAIRING_RULES = {
 
 # All recognized keywords — used by parse_menu.py for extraction
 ALL_KEYWORDS = set(PAIRING_RULES.keys())
+
+# ---------------------------------------------------------------------------
+# Enriched feature → wine preference mappings (used by pairing.py)
+# ---------------------------------------------------------------------------
+
+# Protein → preferred wine styles (same format as PAIRING_RULES["prefer"])
+ENRICHED_PROTEIN_RULES: dict[str, list[str]] = {
+    "beef": ["cabernet", "syrah", "merlot", "barolo", "bordeaux", "malbec"],
+    "lamb": ["cabernet", "syrah", "bordeaux", "rhône", "rhone"],
+    "pork": ["pinot noir", "rosé", "rose", "riesling", "chardonnay"],
+    "chicken": ["pinot noir", "chardonnay", "rosé", "rose"],
+    "turkey": ["pinot noir", "chardonnay", "gamay"],
+    "duck": ["pinot noir", "syrah", "gamay"],
+    "salmon": ["pinot noir", "chardonnay", "rosé", "rose"],
+    "tuna": ["pinot noir", "rosé", "rose"],
+    "fish": ["chardonnay", "sauvignon blanc", "pinot grigio"],
+    "shellfish": ["chardonnay", "sauvignon blanc", "sparkling"],
+    "shrimp": ["sauvignon blanc", "sparkling", "rosé", "rose"],
+    "tofu": ["pinot noir", "riesling", "sauvignon blanc"],
+    "vegetable": ["sauvignon blanc", "rosé", "rose", "pinot noir"],
+}
+
+# Preparation → wine style adjustments
+ENRICHED_PREPARATION_RULES: dict[str, list[str]] = {
+    "grilled": ["cabernet", "syrah", "malbec", "zinfandel"],
+    "braised": ["cabernet", "syrah", "barolo", "bordeaux"],
+    "roasted": ["pinot noir", "cabernet", "chardonnay"],
+    "smoked": ["syrah", "zinfandel", "malbec"],
+    "fried": ["sparkling", "rosé", "rose", "sauvignon blanc"],
+    "raw": ["sparkling", "sauvignon blanc", "pinot grigio"],
+    "poached": ["chardonnay", "pinot grigio", "riesling"],
+    "sautéed": ["pinot noir", "chardonnay", "sauvignon blanc"],
+    "steamed": ["riesling", "sauvignon blanc", "pinot grigio"],
+}
+
+# Richness → wine body preference
+ENRICHED_RICHNESS_RULES: dict[str, list[str]] = {
+    "light": ["sauvignon blanc", "pinot grigio", "rosé", "rose", "gamay", "riesling"],
+    "medium": ["pinot noir", "chardonnay", "merlot", "sangiovese", "barbera"],
+    "rich": ["cabernet", "syrah", "barolo", "bordeaux", "malbec", "zinfandel"],
+}
+
+# Spice heat → wine affinity
+ENRICHED_SPICE_RULES: dict[str, list[str]] = {
+    "medium": ["riesling", "rosé", "rose", "pinot noir"],
+    "high": ["riesling", "gewürztraminer", "rosé", "rose"],
+}
+
+# Acidity → wine acidity matching
+ENRICHED_ACIDITY_RULES: dict[str, list[str]] = {
+    "medium-high": ["sauvignon blanc", "sangiovese", "barbera", "riesling"],
+    "high": ["sauvignon blanc", "sangiovese", "barbera", "riesling", "sparkling"],
+}
+
+# Cuisine → wine region affinity
+ENRICHED_CUISINE_RULES: dict[str, list[str]] = {
+    "italian": ["sangiovese", "nebbiolo", "barbera", "pinot grigio", "chianti"],
+    "french": ["bordeaux", "burgundy", "pinot noir", "chardonnay", "syrah"],
+    "japanese": ["pinot noir", "gamay", "sparkling", "riesling"],
+    "thai": ["riesling", "gewürztraminer", "rosé", "rose"],
+    "mexican": ["malbec", "tempranillo", "rosé", "rose"],
+    "indian": ["riesling", "gewürztraminer", "rosé", "rose"],
+    "korean": ["riesling", "gamay", "pinot noir"],
+    "chinese": ["riesling", "pinot noir", "gamay"],
+    "spanish": ["tempranillo", "garnacha", "rosé", "rose"],
+    "greek": ["rosé", "rose", "sauvignon blanc"],
+    "mediterranean": ["rosé", "rose", "sangiovese", "tempranillo"],
+    "american": ["cabernet", "zinfandel", "chardonnay", "pinot noir"],
+}

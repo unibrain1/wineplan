@@ -24,9 +24,11 @@ GENERATE PLAN (scripted — rules-based) → data/plan.json (staging)
 
 GENERATE NOTES (LLM — Claude Code CLI) → data/plan.json (augmented with CT notes + community notes)
 
-COMPARE & PAIR (scripted)
+ENRICH MENU (LLM — Claude Code CLI) → data/menu_enriched.json (cache) + data/menu_enriched_full.json
+
+COMPARE & PAIR (scripted, enriched-first fallback to keywords)
   ├── inventory + plan → data/report.json
-  └── menu + plan + inventory → data/pairing_suggestions.json
+  └── menu + plan + inventory + enriched → data/pairing_suggestions.json
 
 PUBLISH (atomic — site always has complete plan with notes)
   └── Copy plan.json + pairing_suggestions.json + report.json → site/
@@ -54,6 +56,7 @@ scripts/
   parse_inventory.py          — inventory.tsv → inventory.json
   parse_consumed.py           — consumed.tsv → consumed.json (consumption history)
   fetch_community_notes.py    — RSS feed → community_notes.json (cumulative cache, deduped by iNote)
+  enrich_menu.py              — LLM extraction of structured food features → menu_enriched.json (hash-keyed cache)
   parse_menu.py               — menu.ics → menu.json (Google Calendar .ics feed)
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
@@ -67,6 +70,8 @@ data/                         — Staging area + generated artifacts (gitignored
   plan_previous.json          — Backup of previous live plan (for changelog diff)
   consumed.json               — Parsed consumption history (generated from consumed.tsv)
   community_notes.json        — Cumulative community tasting notes cache (from RSS, keyed by iWine)
+  menu_enriched.json          — LLM enrichment cache (keyed by text hash, persists across runs)
+  menu_enriched_full.json     — Full enriched menu with all entries (regenerated each run)
 conftest.py                   — pytest config: adds scripts/ to sys.path
 pyrightconfig.json            — Pyright type checking config
 pipeline.sh                   — Shared pipeline logic (sourced by fetch.sh and fetch_docker.sh)
@@ -169,8 +174,10 @@ Implemented in `scripts/generate_plan.py`:
 
 ## Wine-Food Pairing Engine ("The Sommelier")
 
-- `wine_keywords.py`: single source of truth for keywords and pairing rules
-- Three outcomes: Pairs Well (green), Sommelier Pick (blue), No Match (muted)
+- `wine_keywords.py`: single source of truth for keyword rules + enriched feature rules (protein, preparation, richness, spice, acidity, cuisine)
+- `enrich_menu.py`: LLM extracts 13-field structured food features from menu text, cached by text hash
+- Enriched-first fallback: try enriched features, fall back to keyword matching, fall back to neutral
+- Three outcomes: Pairs Well (green), Sommelier Pick (blue), No Match (muted) — each with confidence level (high/medium/low)
 - Suggestions prioritize urgent bottles in their drinking window
 - Each meal gets a unique suggestion
 - Varietal-aware: looks up inventory varietal for planned wines to improve matching
