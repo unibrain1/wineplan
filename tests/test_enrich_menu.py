@@ -3,7 +3,8 @@
 import json
 
 
-from enrich_menu import build_enrichment_prompt, extract_json, load_cache, text_hash
+from enrich_menu import build_enrichment_prompt, load_cache, text_hash
+from wine_utils import extract_json
 
 
 class TestTextHash:
