@@ -199,11 +199,24 @@ function renderCalendar() {
     if (!byYear[yr][mo]) byYear[yr][mo] = [];
     byYear[yr][mo].push(w);
   });
+  // Build a map of which plan years (1, 2) appear in each calendar year
+  const planYearsByCalYear = {};
+  allWeeks.forEach(function(w) {
+    const calYr = new Date(w.date).getFullYear();
+    if (!planYearsByCalYear[calYr]) planYearsByCalYear[calYr] = new Set();
+    planYearsByCalYear[calYr].add(w.year);
+  });
   Object.keys(byYear).sort().forEach(function(yr) {
     const yearBlock = document.createElement('div');
     const yh = document.createElement('div');
     yh.className = 'cal-year-header';
-    const subText = yr == 2026 ? 'Year 1 begins' : yr == 2027 ? 'Year 1 ends · Year 2 begins' : 'Year 2 ends';
+    const py = planYearsByCalYear[yr] || new Set();
+    const parts = [];
+    if (py.has(1) && py.has(2)) { parts.push('Year 1 ends', 'Year 2 begins'); }
+    else if (py.has(1)) { parts.push('Year 1'); }
+    else if (py.has(2)) { parts.push('Year 2'); }
+    const subText = parts.join(' \u00b7 ');
+    // yr and subText are derived from trusted plan data (integers and static strings)
     yh.innerHTML = yr + ' <span class="cal-year-sub">' + subText + '</span>';
     yearBlock.appendChild(yh);
     const grid = document.createElement('div');
@@ -226,7 +239,7 @@ function renderCalendar() {
         const flags = [];
         if (w.urgent)    flags.push('<span class="cal-flag urgent">⚠ Urgent</span>');
         if (w.evolution) flags.push('<span class="cal-flag evolution">◉ Evolution</span>');
-        if (w.occasion)  flags.push('<span class="cal-flag occasion">' + occasionIcon(w.occasion) + ' ' + w.occasion + '</span>');
+        if (w.occasion)  flags.push('<span class="cal-flag occasion">' + occasionIcon(w.occasion) + ' ' + escapeHtml(w.occasion) + '</span>');
         else if (w.special && !w.evolution) flags.push('<span class="cal-flag special">◆ Special</span>');
         const entry = document.createElement('div');
         entry.className = 'cal-entry';
@@ -235,7 +248,7 @@ function renderCalendar() {
           '<div class="cal-entry-body">' +
             '<div class="cal-entry-date">' + dayStr + ' &nbsp;·&nbsp; ' + label + '</div>' +
             '<div class="cal-entry-name"><span class="cal-entry-vintage">' + w.vintage + '</span> ' + w.name + '</div>' +
-            '<div class="cal-entry-sub">' + w.appellation.split(' · ')[0] + '</div>' +
+            '<div class="cal-entry-sub">' + escapeHtml(w.appellation.split(' · ')[0]) + '</div>' +
             (flags.length ? '<div class="cal-entry-flags">' + flags.join('') + '</div>' : '') +
           '</div>';
         var calPairings = getPairingsForWeek(w.date);
@@ -385,17 +398,17 @@ function renderPlan() {
         let html = '<div class="card-top"><span class="week-num">Week ' + w.week + '</span><span class="week-date">' + w.date + '</span></div>';
         html += '<div class="badge badge-' + w.badge + '">' + wineIcon(w.badge, 14) + label + '</div>';
         html += '<div class="wine-name"><span class="wine-vintage">' + w.vintage + '</span> ' + w.name + '</div>';
-        html += '<div class="wine-appellation">' + w.appellation + '</div>';
+        html += '<div class="wine-appellation">' + escapeHtml(w.appellation) + '</div>';
         if (w.window || w.score) {
           html += '<div class="wine-meta">';
           if (w.window) html += '<div class="meta-item">Window <span>' + w.window + '</span></div>';
           if (w.score)  html += '<div class="meta-item">Score <span>' + w.score + '</span></div>';
           html += '</div>';
         }
-        if (w.occasion)  html += '<div class="occasion-tag">' + occasionIcon(w.occasion) + ' ' + w.occasion + '</div>';
+        if (w.occasion)  html += '<div class="occasion-tag">' + occasionIcon(w.occasion) + ' ' + escapeHtml(w.occasion) + '</div>';
         if (w.urgent)    html += '<div class="urgent-flag">Drink now — urgent</div>';
         if (w.evolution) html += '<div class="evolution-flag">Evolution track</div>';
-        html += '<div class="note-text">' + w.note + '</div>';
+        html += '<div class="note-text">' + escapeHtml(w.note) + '</div>';
         var pairings = getPairingsForWeek(w.date);
         html += renderPairingsHtml(pairings);
         card.innerHTML = html;
