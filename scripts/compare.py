@@ -215,6 +215,9 @@ def compare(inventory: list[dict], plan: list[dict]) -> dict:
             "urgent_new_count": len(urgent_new),
             "mismatch_count": len(mismatches),
             "unplanned_count": len(unplanned),
+            "cellar_total_valuation": sum(
+                w.get("TotalValuation") or 0.0 for w in inventory
+            ),
         },
         "consumed": consumed,
         "urgent_new": urgent_new,

@@ -24,6 +24,7 @@ from plan_config import EVOLUTION_TRACKS, HOLIDAYS
 from scoring import composite_score
 from wine_utils import (
     CURRENT_YEAR,
+    PRO_SCORE_FIELDS,
     TYPE_TO_BADGE,
     apply_default_windows,
     normalize,
@@ -109,11 +110,14 @@ def build_window(wine: dict) -> str | None:
 
 
 def build_score(wine: dict) -> str | None:
-    """Return 'CT##' score string, or None if absent."""
+    """Return best available critic score label (e.g., 'WA92', 'CT90'), or None."""
+    for field in PRO_SCORE_FIELDS:
+        val = wine.get(field)
+        if val is not None:
+            return f"{field}{val:g}"
     ct = wine.get("CT")
     if ct is None:
         return None
-    # Format: CT90 for whole numbers, CT90.5 for fractional
     return f"CT{ct:g}"
 
 

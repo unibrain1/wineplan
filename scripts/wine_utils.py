@@ -2,8 +2,9 @@
 """Shared utilities for wine plan scripts.
 
 Symbols exported:
-  CURRENT_YEAR  — current calendar year
-  TYPE_TO_BADGE — CellarTracker Type → plan badge mapping
+  CURRENT_YEAR      — current calendar year
+  PRO_SCORE_FIELDS  — professional critic score field names
+  TYPE_TO_BADGE     — CellarTracker Type → plan badge mapping
   normalize     — canonical name normalizer (accent-aware)
   urgency_score — bottle urgency priority (0 = most urgent)
 """
@@ -24,6 +25,8 @@ if "TZ" in os.environ:
 CURRENT_YEAR: int = date.today().year
 
 # Map CellarTracker Type field to plan badge.
+PRO_SCORE_FIELDS = ("WA", "WS", "BH", "AG", "JR", "JS", "JG")
+
 TYPE_TO_BADGE: dict[str, str] = {
     "Red": "red",
     "White": "white",
