@@ -252,9 +252,7 @@ def format_digest_html(digest: dict) -> str:
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
 
 <tr><td style="background:linear-gradient(135deg,#3e3f3a 0%,#4a4b46 100%);padding:28px 32px;text-align:center;">
-  <div style="font-size:28px;font-weight:700;color:#ffffff;letter-spacing:0.5px;">
-    🍷 <em style="font-style:italic;font-weight:300;">The</em> Sommelier
-  </div>
+  <img src="https://the-sommelier.unibrain.org/logo.png" alt="The Sommelier" width="120" style="display:block;margin:0 auto 12px;">
   <div style="color:#c5bdb0;font-size:13px;margin-top:6px;letter-spacing:1px;text-transform:uppercase;">
     {date_display}
   </div>
