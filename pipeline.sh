@@ -119,7 +119,7 @@ python3 scripts/generate_plan.py data/inventory.json data/plan.json || { log "ER
 # --- GENERATE NOTES (LLM — Claude Code CLI, augmented with CT notes) ---
 if command -v claude &> /dev/null; then
   log "==> Generating tasting notes (Claude)..."
-  python3 scripts/generate_notes.py data/plan.json data/notes.tsv data/foodtags.tsv data/community_notes.json || log "WARNING: Note generation failed — plan will have empty notes"
+  python3 scripts/generate_notes.py data/plan.json data/notes.tsv data/foodtags.tsv data/community_notes.json data/inventory.json || log "WARNING: Note generation failed — plan will have empty notes"
 else
   log "    Skipping note generation — claude CLI not available"
 fi

@@ -7,7 +7,7 @@ CT tasting notes, community tasting notes, and food pairing data.
 
 Requires CLAUDE_CODE_OAUTH_TOKEN in the environment.
 
-Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv] [community_notes.json]
+Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv] [community_notes.json] [inventory.json]
 """
 
 import csv
@@ -58,19 +58,18 @@ def parse_ct_foodtags(foodtags_path: str) -> dict[str, list[str]]:
     return tags_by_wine
 
 
-def load_inventory_index(plan_data: dict) -> dict[str, str]:
-    """Build a rough vintage+name → iWine index from plan entries (if available)."""
-    # plan entries don't have iWine, but we can match via inventory.json if present
+def load_inventory_index(inv_path: str | None) -> dict[str, str]:
+    """Build a rough vintage+name → iWine index from inventory.json (if available)."""
     index = {}
-    inv_path = Path("data/inventory.json")
-    if inv_path.exists():
-        try:
-            inventory = json.loads(inv_path.read_text())
-            for wine in inventory:
-                key = f"{wine.get('Vintage', '')}|{wine.get('Wine', '')}".lower()
-                index[key] = str(wine.get("iWine", ""))
-        except Exception:
-            pass
+    if not inv_path:
+        return index
+    try:
+        inventory = json.loads(Path(inv_path).read_text(encoding="utf-8"))
+        for wine in inventory:
+            key = f"{wine.get('Vintage', '')}|{wine.get('Wine', '')}".lower()
+            index[key] = str(wine.get("iWine", ""))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
+        print(f"WARNING: Could not load inventory index: {e}", file=sys.stderr)
     return index
 
 
@@ -170,6 +169,7 @@ def generate_notes(
     notes_path: str | None = None,
     foodtags_path: str | None = None,
     community_notes_path: str | None = None,
+    inventory_path: str | None = None,
 ) -> None:
     """Generate notes for plan entries with empty notes."""
     plan_data = json.loads(Path(plan_path).read_text())
@@ -179,7 +179,7 @@ def generate_notes(
     ct_notes = parse_ct_notes(notes_path) if notes_path else {}
     ct_foodtags = parse_ct_foodtags(foodtags_path) if foodtags_path else {}
     community_notes = load_community_notes(community_notes_path)
-    inv_index = load_inventory_index(plan_data)
+    inv_index = load_inventory_index(inventory_path)
 
     if ct_notes:
         print(f"  Loaded {sum(len(v) for v in ct_notes.values())} CellarTracker notes")
@@ -202,6 +202,7 @@ def generate_notes(
     print(f"Generating notes for {len(needs_notes)} entries...")
 
     # Process in batches
+    week_map = {w["week"]: w for w in all_weeks}
     notes_generated = 0
     for i in range(0, len(needs_notes), BATCH_SIZE):
         batch = needs_notes[i : i + BATCH_SIZE]
@@ -215,12 +216,17 @@ def generate_notes(
 
         notes = extract_json(response)
         for week_str, note in notes.items():
-            week_num = int(week_str)
-            for w in all_weeks:
-                if w["week"] == week_num:
-                    w["note"] = note
-                    notes_generated += 1
-                    break
+            try:
+                week_num = int(week_str)
+            except ValueError:
+                print(
+                    f"WARNING: Skipping non-numeric week key: {week_str!r}",
+                    file=sys.stderr,
+                )
+                continue
+            if week_num in week_map:
+                week_map[week_num]["note"] = note
+                notes_generated += 1
 
     Path(plan_path).write_text(
         json.dumps(plan_data, indent=2, ensure_ascii=False), encoding="utf-8"
@@ -231,7 +237,7 @@ def generate_notes(
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
-            "Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv] [community_notes.json]",
+            "Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv] [community_notes.json] [inventory.json]",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -240,4 +246,5 @@ if __name__ == "__main__":
         sys.argv[2] if len(sys.argv) > 2 else None,
         sys.argv[3] if len(sys.argv) > 3 else None,
         sys.argv[4] if len(sys.argv) > 4 else None,
+        sys.argv[5] if len(sys.argv) > 5 else None,
     )
