@@ -65,16 +65,20 @@ PID_NOTES=$!
 curl -sf "${CT_BASE}&Table=FoodTags" -o data/foodtags.tsv &
 PID_FOOD=$!
 
+curl -sf "${CT_BASE}&Table=Consumed" -o data/consumed.tsv &
+PID_CONSUMED=$!
+
 curl -sf "${GOOGLE_CALENDAR_ICS_URL}" -o data/menu.ics &
 PID_CAL=$!
 
 wait $PID_CT || { log "ERROR: CellarTracker inventory fetch failed"; exit 1; }
 wait $PID_NOTES || { log "WARNING: CellarTracker notes fetch failed — continuing without notes"; }
 wait $PID_FOOD || { log "WARNING: CellarTracker food tags fetch failed — continuing without food tags"; }
+wait $PID_CONSUMED || { log "WARNING: CellarTracker consumed fetch failed — continuing without consumed data"; }
 wait $PID_CAL || { log "ERROR: Google Calendar fetch failed — check GOOGLE_CALENDAR_ICS_URL"; exit 1; }
 
 LINES=$(wc -l < data/inventory.tsv | tr -d ' ')
-log "    Downloaded $((LINES - 1)) bottles + notes + food tags + menu calendar"
+log "    Downloaded $((LINES - 1)) bottles + notes + food tags + consumed + menu calendar"
 
 # --- PARSE (scripted) ---
 log "==> Parsing inventory and menu..."
@@ -84,8 +88,16 @@ PID_INV=$!
 python3 scripts/parse_menu.py data/menu.ics > data/menu.json &
 PID_MENU=$!
 
+if [[ -s data/consumed.tsv ]]; then
+  python3 scripts/parse_consumed.py data/consumed.tsv > data/consumed.json &
+  PID_CONSUMED_PARSE=$!
+fi
+
 wait $PID_INV || { log "ERROR: Inventory parse failed"; exit 1; }
 wait $PID_MENU || { log "ERROR: Menu parse failed"; exit 1; }
+if [[ -n "${PID_CONSUMED_PARSE:-}" ]]; then
+  wait "$PID_CONSUMED_PARSE" || { log "WARNING: Consumed parse failed — continuing without consumed data"; }
+fi
 
 # --- GENERATE PLAN to staging (scripted — rules-based) ---
 # Build new plan in data/ first, only publish to site/ when complete with notes

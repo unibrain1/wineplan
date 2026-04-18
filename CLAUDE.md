@@ -16,6 +16,7 @@ FETCH (scripted, parallel)
   ├── CellarTracker inventory  → data/inventory.tsv → data/inventory.json
   ├── CellarTracker notes      → data/notes.tsv
   ├── CellarTracker food tags  → data/foodtags.tsv
+  ├── CellarTracker consumed   → data/consumed.tsv → data/consumed.json
   └── Google Calendar menu     → data/menu.ics → data/menu.json
 
 GENERATE PLAN (scripted — rules-based) → data/plan.json (staging)
@@ -50,6 +51,7 @@ scripts/
   generate_notes.py           — Tasting notes (Claude CLI, augmented with CT notes/food tags)
   wine_keywords.py            — Single source of truth for food keywords and pairing rules
   parse_inventory.py          — inventory.tsv → inventory.json
+  parse_consumed.py           — consumed.tsv → consumed.json (consumption history)
   parse_menu.py               — menu.ics → menu.json (Google Calendar .ics feed)
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
@@ -61,6 +63,7 @@ plans/                        — Design specs and algorithm proposals (gitignor
 data/                         — Staging area + generated artifacts (gitignored)
   plan.json                   — Staged plan (copied to site/ after notes generated)
   plan_previous.json          — Backup of previous live plan (for changelog diff)
+  consumed.json               — Parsed consumption history (generated from consumed.tsv)
 conftest.py                   — pytest config: adds scripts/ to sys.path
 pyrightconfig.json            — Pyright type checking config
 pipeline.sh                   — Shared pipeline logic (sourced by fetch.sh and fetch_docker.sh)
@@ -148,9 +151,10 @@ Implemented in `scripts/generate_plan.py`:
 
 ## CellarTracker Data Sources
 
-- `Table=Inventory` — bottles, varietals, types, scores, windows (system of record)
+- `Table=Inventory` — bottles, varietals, types, scores (CT community + pro critics: WA, WS, BH, AG, JR, JS, JG), purchase data, valuation (system of record)
 - `Table=Notes` — user's tasting notes (augments Claude-generated notes)
 - `Table=FoodTags` — user's food pairing tags (augments pairing suggestions)
+- `Table=Consumed` — consumption history (non-fatal; continues without if fetch fails)
 - Community tasting notes are NOT available via the export API
 
 ## Google Calendar Integration
@@ -182,4 +186,4 @@ Implemented in `scripts/generate_plan.py`:
 - Plan is regenerated from scratch every pipeline run — no manual editing of `plan.json`
 - Plan staged to `data/plan.json`, only published to `site/` when complete with notes
 - Shared utilities in `scripts/wine_utils.py` — do not duplicate `urgency_score`, `normalize`, `TYPE_TO_BADGE`, or `CURRENT_YEAR` in individual scripts
-- Composite scoring in `scripts/scoring.py` — `composite_score()` combines window position (50%), seasonal fit (25%), diversity (15%), CT quality (10%). Lower score = schedule sooner. Also owns `seasonal_score()` and red-subtype helpers (moved from `generate_plan.py` to avoid circular imports)
+- Composite scoring in `scripts/scoring.py` — `composite_score()` combines window position (50%), seasonal fit (25%), diversity (15%), CT quality (10%). Lower score = schedule sooner. Plan labels show best available critic score (WA → WS → BH → AG → JR → JS → JG → CT). Also owns `seasonal_score()` and red-subtype helpers (moved from `generate_plan.py` to avoid circular imports)

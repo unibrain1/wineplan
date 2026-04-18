@@ -10,6 +10,8 @@ import json
 import sys
 from pathlib import Path
 
+from wine_utils import PRO_SCORE_FIELDS
+
 KEEP_FIELDS = [
     "iWine",
     "Vintage",
@@ -33,6 +35,18 @@ KEEP_FIELDS = [
     "EndConsume",
     "CT",
     "MY",
+    "WA",
+    "WS",
+    "BH",
+    "AG",
+    "JR",
+    "JS",
+    "JG",
+    "cNotes",
+    "Price",
+    "PurchaseDate",
+    "StoreName",
+    "Valuation",
 ]
 
 
@@ -74,6 +88,13 @@ def parse_inventory(tsv_path: str | Path) -> list[dict]:
         wine["EndConsume"] = int_or_none(wine["EndConsume"])
         wine["CT"] = float_or_none(wine["CT"])
         wine["MY"] = float_or_none(wine["MY"])
+        for score_field in PRO_SCORE_FIELDS:
+            wine[score_field] = float_or_none(wine[score_field])
+        wine["cNotes"] = int_or_none(wine["cNotes"])
+        wine["Price"] = float_or_none(wine["Price"])
+        wine["Valuation"] = float_or_none(wine["Valuation"])
+        total_val = sum(float_or_none(b.get("Valuation")) or 0.0 for b in bottles)
+        wine["TotalValuation"] = round(total_val, 2) if total_val else None
         wines.append(wine)
 
     # Sort by EndConsume ascending (nulls last)
