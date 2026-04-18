@@ -16,18 +16,27 @@ FETCH (scripted, parallel)
   ├── CellarTracker inventory  → data/inventory.tsv → data/inventory.json
   ├── CellarTracker notes      → data/notes.tsv
   ├── CellarTracker food tags  → data/foodtags.tsv
+  ├── CellarTracker consumed   → data/consumed.tsv → data/consumed.json
+  ├── CellarTracker community notes (RSS) → data/community_notes.json (cumulative)
   └── Google Calendar menu     → data/menu.ics → data/menu.json
 
 GENERATE PLAN (scripted — rules-based) → data/plan.json (staging)
 
-GENERATE NOTES (LLM — Claude Code CLI) → data/plan.json (augmented with CT notes)
+GENERATE NOTES (LLM — Claude Code CLI) → data/plan.json (augmented with CT notes + community notes)
 
-COMPARE & PAIR (scripted)
+ENRICH MENU (LLM — Claude Code CLI) → data/menu_enriched.json (cache) + data/menu_enriched_full.json
+
+COMPARE & PAIR (scripted, enriched-first fallback to keywords)
   ├── inventory + plan → data/report.json
-  └── menu + plan + inventory → data/pairing_suggestions.json
+  └── menu + plan + inventory + enriched → data/pairing_suggestions.json
 
 PUBLISH (atomic — site always has complete plan with notes)
   └── Copy plan.json + pairing_suggestions.json + report.json → site/
+
+GENERATE DIGEST → site/digest.json + site/digest.html (only when menu exists for today)
+
+SEND DIGEST (separate 8am cron via supercronic)
+  └── Gmail SMTP → configured recipients (idempotent, skips routine days)
 ```
 
 ## Directory Structure
@@ -41,31 +50,56 @@ site/                         — Served by nginx (data + presentation + style s
   plan.json                   — Plan data: allWeeks, quarterInfo, changelog (generated)
   pairing_suggestions.json    — Pairing suggestions (generated)
   report.json                 — Inventory diff report (generated)
+  digest.json                 — Morning digest data (generated, today's wine + pairings)
+  digest.html                 — Morning digest email body (generated)
+  thisweek.json               — Current week's plan entry (generated, for HA integration)
+  today.json                  — Today's pairing entry (generated, for HA integration)
 scripts/
   plan_config.py              — Holidays + evolution tracks (gitignored, personal)
   plan_config.py.sample       — Template for plan_config.py
-  wine_utils.py               — Shared: CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
-  scoring.py                  — Composite scoring: composite_score, window/seasonal/diversity/CT components
+  wine_utils.py               — Shared: CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score, call_claude, extract_json, find_current_week
+  scoring.py                  — Composite scoring: composite_score, window/seasonal/diversity/CT/community components
   generate_plan.py            — Deterministic plan generator (rules-based)
-  generate_notes.py           — Tasting notes (Claude CLI, augmented with CT notes/food tags)
+  generate_notes.py           — Tasting notes (Claude CLI, augmented with CT notes/food tags/community notes)
   wine_keywords.py            — Single source of truth for food keywords and pairing rules
   parse_inventory.py          — inventory.tsv → inventory.json
+  parse_consumed.py           — consumed.tsv → consumed.json (consumption history)
+  fetch_community_notes.py    — RSS feed → community_notes.json (cumulative cache, deduped by iNote)
+  enrich_menu.py              — LLM extraction of structured food features → menu_enriched.json (hash-keyed cache)
+  generate_digest.py          — Morning digest: tonight's wine + menu pairings → digest.json + digest.html
+  send_digest.py              — Send digest via Gmail SMTP (--dry-run, --force, idempotent)
   parse_menu.py               — menu.ics → menu.json (Google Calendar .ics feed)
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
+  thisweek.py                 — Find current week's entry from plan.json (used by HA integration)
+  today.py                    — Find today's menu/pairing entry from plan.json (used by HA integration)
 tests/
   test_scoring.py             — Unit tests for all scoring components
+  test_pairing_enriched.py    — Tests for enriched food-wine pairing
+  test_enrich_menu.py         — Tests for LLM menu enrichment
+  test_fetch_community_notes.py — Tests for RSS community notes fetch
+  test_parse_consumed.py      — Tests for consumption history parsing
+  test_parse_inventory.py     — Tests for inventory parsing
+  test_generate_digest.py     — Tests for morning digest generation
+  test_send_digest.py         — Tests for digest email sending
+  test_diff_plans.py          — Tests for plan diff/changelog logic
 docs/
   menu-guide.md               — How to write menu entries for best pairing results
 plans/                        — Design specs and algorithm proposals (gitignored)
 data/                         — Staging area + generated artifacts (gitignored)
   plan.json                   — Staged plan (copied to site/ after notes generated)
   plan_previous.json          — Backup of previous live plan (for changelog diff)
+  consumed.json               — Parsed consumption history (generated from consumed.tsv)
+  community_notes.json        — Cumulative community tasting notes cache (from RSS, keyed by iWine)
+  menu_enriched.json          — LLM enrichment cache (keyed by text hash, persists across runs)
+  menu_enriched_full.json     — Full enriched menu with all entries (regenerated each run)
+  digest_last_sent.txt        — Idempotency state file for send_digest.py (date of last send)
 conftest.py                   — pytest config: adds scripts/ to sys.path
 pyrightconfig.json            — Pyright type checking config
 pipeline.sh                   — Shared pipeline logic (sourced by fetch.sh and fetch_docker.sh)
 fetch.sh                      — Local pipeline entry point
 fetch_docker.sh               — Docker pipeline entry point
+send_digest.sh                — Wrapper: resolves SMTP creds from 1Password, runs send_digest.py
 Dockerfile                    — Python 3.12 + nginx + 1Password + Claude CLI + supercronic + git
 docker-compose.yml            — the-sommelier on port 8089 + Traefik proxy + run-now profile
 entrypoint.sh                 — git pull, starts nginx, schedules cron, runs initial sync
@@ -118,7 +152,7 @@ Code changes pushed to GitHub are picked up automatically on next `down/up` or s
 
 - **CellarTracker is the system of record** for all wine metadata: Type/badge, Varietal, Appellation, scores, drinking windows, quantity.
 - **Scripted rules** handle: plan generation (scheduling, priority, seasonal fit, evolution, holidays), inventory comparison, food-wine pairing suggestions.
-- **Claude (LLM)** handles: tasting note generation only. Notes are contextual 1-2 sentence descriptions augmented with CellarTracker notes and food tags. If Claude CLI is unavailable, the pipeline continues with empty notes.
+- **Claude (LLM)** handles: tasting note generation and menu enrichment. Notes are contextual 1-2 sentence descriptions augmented with CellarTracker notes and food tags. Menu enrichment extracts structured food features (protein, preparation, richness, etc.) for pairing. If Claude CLI is unavailable, the pipeline continues with empty notes and falls back to keyword-based pairing.
 
 ## Architecture: Data / Presentation / Style
 
@@ -148,10 +182,11 @@ Implemented in `scripts/generate_plan.py`:
 
 ## CellarTracker Data Sources
 
-- `Table=Inventory` — bottles, varietals, types, scores, windows (system of record)
+- `Table=Inventory` — bottles, varietals, types, scores (CT community + pro critics: WA, WS, BH, AG, JR, JS, JG), purchase data, valuation (system of record)
 - `Table=Notes` — user's tasting notes (augments Claude-generated notes)
 - `Table=FoodTags` — user's food pairing tags (augments pairing suggestions)
-- Community tasting notes are NOT available via the export API
+- `Table=Consumed` — consumption history (non-fatal; continues without if fetch fails)
+- `rssnote.asp` RSS feed — community tasting notes for wines in your cellar (up to 200 items per fetch, cumulative cache at `data/community_notes.json`). Requires `CK` token in 1Password. Non-fatal; continues without if unavailable.
 
 ## Google Calendar Integration
 
@@ -162,8 +197,10 @@ Implemented in `scripts/generate_plan.py`:
 
 ## Wine-Food Pairing Engine ("The Sommelier")
 
-- `wine_keywords.py`: single source of truth for keywords and pairing rules
-- Three outcomes: Pairs Well (green), Sommelier Pick (blue), No Match (muted)
+- `wine_keywords.py`: single source of truth for keyword rules + enriched feature rules (protein, preparation, richness, spice, acidity, cuisine)
+- `enrich_menu.py`: LLM extracts 13-field structured food features from menu text, cached by text hash
+- Enriched-first fallback: try enriched features, fall back to keyword matching, fall back to neutral
+- Three outcomes: Pairs Well (green), Sommelier Pick (blue), No Match (muted) — each with confidence level (high/medium/low)
 - Suggestions prioritize urgent bottles in their drinking window
 - Each meal gets a unique suggestion
 - Varietal-aware: looks up inventory varietal for planned wines to improve matching
@@ -182,4 +219,4 @@ Implemented in `scripts/generate_plan.py`:
 - Plan is regenerated from scratch every pipeline run — no manual editing of `plan.json`
 - Plan staged to `data/plan.json`, only published to `site/` when complete with notes
 - Shared utilities in `scripts/wine_utils.py` — do not duplicate `urgency_score`, `normalize`, `TYPE_TO_BADGE`, or `CURRENT_YEAR` in individual scripts
-- Composite scoring in `scripts/scoring.py` — `composite_score()` combines window position (50%), seasonal fit (25%), diversity (15%), CT quality (10%). Lower score = schedule sooner. Also owns `seasonal_score()` and red-subtype helpers (moved from `generate_plan.py` to avoid circular imports)
+- Composite scoring in `scripts/scoring.py` — `composite_score()` combines window position (50%), seasonal fit (25%), diversity (10%), CT quality (10%), community signals (5%). Community signals use RSS note data: recent score drift, note velocity, and text-based window drift detection. Lower score = schedule sooner. Plan labels show best available critic score (WA → WS → BH → AG → JR → JS → JG → CT). Also owns `seasonal_score()` and red-subtype helpers (moved from `generate_plan.py` to avoid circular imports)

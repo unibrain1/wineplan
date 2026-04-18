@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """Generate tasting notes for plan entries using Claude Code CLI.
 
-Reads plan.json and optionally CellarTracker notes/food tags to generate
-contextual tasting notes. Claude augments any existing CT tasting notes
-and food pairing data.
+Reads plan.json and optionally CellarTracker notes/food tags and community
+notes to generate contextual tasting notes. Claude augments any existing
+CT tasting notes, community tasting notes, and food pairing data.
 
 Requires CLAUDE_CODE_OAUTH_TOKEN in the environment.
 
-Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv]
+Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv] [community_notes.json]
 """
 
 import csv
 import json
-import subprocess
 import sys
 from pathlib import Path
+
+from wine_utils import call_claude, extract_json
 
 BATCH_SIZE = 20  # bottles per Claude call to stay within context
 
@@ -87,13 +88,24 @@ def find_iwine(vintage: str, name: str, inv_index: dict[str, str]) -> str:
     return ""
 
 
+def load_community_notes(path: str | None) -> dict[str, list[dict]]:
+    """Load community notes JSON cache, indexed by iWine."""
+    if not path:
+        return {}
+    from fetch_community_notes import load_cache
+
+    return load_cache(Path(path))
+
+
 def build_prompt(
     entries: list[dict],
     ct_notes: dict[str, list[str]],
     ct_foodtags: dict[str, list[str]],
     inv_index: dict[str, str],
+    community_notes: dict[str, list[dict]] | None = None,
 ) -> str:
     """Build a prompt for Claude to generate notes, augmented with CT data."""
+    community_notes = community_notes or {}
     lines = []
     for e in entries:
         urgent = "URGENT — past peak or expiring" if e.get("urgent") else ""
@@ -118,6 +130,19 @@ def build_prompt(
             tags = ct_foodtags.get(iwine, [])
             if tags:
                 line += f"\n  Food pairings (from CT): {', '.join(tags[:5])}"
+            # Include recent community tasting notes
+            cn = community_notes.get(iwine, [])
+            if cn:
+                quotes = []
+                for n in cn[:3]:
+                    score_str = f" ({n['score']} pts)" if n.get("score") else ""
+                    body = (n.get("body") or "")[:150]
+                    if body:
+                        quotes.append(
+                            f'"{body}"{score_str} — {n.get("author", "anon")}'
+                        )
+                if quotes:
+                    line += "\n  Community notes: " + " | ".join(quotes)
 
         lines.append(line)
 
@@ -125,6 +150,7 @@ def build_prompt(
     return f"""Generate a one-sentence tasting note for each wine below. The note should:
 - Be 1-2 sentences max, conversational tone
 - If a CellarTracker note is provided, build on it — don't repeat it verbatim but reference the user's experience
+- If community notes are provided, ground your note in what real tasters are saying — reference consensus or standout observations
 - If food pairings from CT are provided, incorporate them as suggestions
 - For urgent/past-peak wines: acknowledge the wine may be declining, suggest decanting or having a backup
 - For evolution wines: mention comparing with previous/future vintages
@@ -139,44 +165,11 @@ Wines:
 {bottle_list}"""
 
 
-def call_claude(prompt: str) -> str:
-    """Call Claude CLI with a prompt and return the response."""
-    try:
-        result = subprocess.run(
-            ["claude", "--print", "--model", "haiku", prompt],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except subprocess.TimeoutExpired:
-        print("WARNING: Claude CLI timed out", file=sys.stderr)
-        return ""
-    if result.returncode != 0:
-        print(
-            f"WARNING: Claude CLI returned {result.returncode}: {result.stderr}",
-            file=sys.stderr,
-        )
-        return ""
-    return result.stdout.strip()
-
-
-def extract_json(text: str) -> dict:
-    """Extract JSON object from Claude's response."""
-    start = text.find("{")
-    end = text.rfind("}") + 1
-    if start == -1 or end == 0:
-        return {}
-    try:
-        return json.loads(text[start:end])
-    except json.JSONDecodeError:
-        print("WARNING: Could not parse Claude response as JSON", file=sys.stderr)
-        return {}
-
-
 def generate_notes(
     plan_path: str,
     notes_path: str | None = None,
     foodtags_path: str | None = None,
+    community_notes_path: str | None = None,
 ) -> None:
     """Generate notes for plan entries with empty notes."""
     plan_data = json.loads(Path(plan_path).read_text())
@@ -185,6 +178,7 @@ def generate_notes(
     # Load CellarTracker data if available
     ct_notes = parse_ct_notes(notes_path) if notes_path else {}
     ct_foodtags = parse_ct_foodtags(foodtags_path) if foodtags_path else {}
+    community_notes = load_community_notes(community_notes_path)
     inv_index = load_inventory_index(plan_data)
 
     if ct_notes:
@@ -192,6 +186,11 @@ def generate_notes(
     if ct_foodtags:
         print(
             f"  Loaded {sum(len(v) for v in ct_foodtags.values())} CellarTracker food tags"
+        )
+    if community_notes:
+        total_cn = sum(len(v) for v in community_notes.values())
+        print(
+            f"  Loaded {total_cn} community notes across {len(community_notes)} wines"
         )
 
     # Find entries that need notes
@@ -206,7 +205,7 @@ def generate_notes(
     notes_generated = 0
     for i in range(0, len(needs_notes), BATCH_SIZE):
         batch = needs_notes[i : i + BATCH_SIZE]
-        prompt = build_prompt(batch, ct_notes, ct_foodtags, inv_index)
+        prompt = build_prompt(batch, ct_notes, ct_foodtags, inv_index, community_notes)
 
         print(f"  Batch {i // BATCH_SIZE + 1}: {len(batch)} wines...")
         response = call_claude(prompt)
@@ -232,7 +231,7 @@ def generate_notes(
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
-            "Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv]",
+            "Usage: generate_notes.py <plan.json> [notes.tsv] [foodtags.tsv] [community_notes.json]",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -240,4 +239,5 @@ if __name__ == "__main__":
         sys.argv[1],
         sys.argv[2] if len(sys.argv) > 2 else None,
         sys.argv[3] if len(sys.argv) > 3 else None,
+        sys.argv[4] if len(sys.argv) > 4 else None,
     )

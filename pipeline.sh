@@ -52,6 +52,10 @@ CT_PASSWORD=$(op read "$PASSWORD") || { log "ERROR: Failed to resolve CellarTrac
 GOOGLE_CALENDAR_ICS_URL=$(op read "$GOOGLE_CALENDAR_ICS_URL") || { log "ERROR: Failed to resolve Google Calendar URL from 1Password"; exit 1; }
 export CLAUDE_CODE_OAUTH_TOKEN
 CLAUDE_CODE_OAUTH_TOKEN=$(op read "$CLAUDE_CODE_OAUTH_TOKEN") || { log "WARNING: Failed to resolve Claude OAuth token from 1Password"; }
+CT_COMMUNITY_NOTES_RSS=$(op read "$CT_COMMUNITY_NOTES_RSS") || { log "WARNING: Failed to resolve community notes RSS URL from 1Password — continuing without community notes"; }
+export SMTP_USERNAME SMTP_PASSWORD DIGEST_RECIPIENTS
+SMTP_USERNAME=$(op read "$SMTP_USERNAME") || { log "WARNING: Failed to resolve SMTP username — digest email disabled"; }
+SMTP_PASSWORD=$(op read "$SMTP_PASSWORD") || { log "WARNING: Failed to resolve SMTP password — digest email disabled"; }
 
 CT_BASE="https://www.cellartracker.com/xlquery.asp?User=${CT_USERNAME}&Password=${CT_PASSWORD}&Format=tab"
 
@@ -65,16 +69,20 @@ PID_NOTES=$!
 curl -sf "${CT_BASE}&Table=FoodTags" -o data/foodtags.tsv &
 PID_FOOD=$!
 
+curl -sf "${CT_BASE}&Table=Consumed" -o data/consumed.tsv &
+PID_CONSUMED=$!
+
 curl -sf "${GOOGLE_CALENDAR_ICS_URL}" -o data/menu.ics &
 PID_CAL=$!
 
 wait $PID_CT || { log "ERROR: CellarTracker inventory fetch failed"; exit 1; }
 wait $PID_NOTES || { log "WARNING: CellarTracker notes fetch failed — continuing without notes"; }
 wait $PID_FOOD || { log "WARNING: CellarTracker food tags fetch failed — continuing without food tags"; }
+wait $PID_CONSUMED || { log "WARNING: CellarTracker consumed fetch failed — continuing without consumed data"; }
 wait $PID_CAL || { log "ERROR: Google Calendar fetch failed — check GOOGLE_CALENDAR_ICS_URL"; exit 1; }
 
 LINES=$(wc -l < data/inventory.tsv | tr -d ' ')
-log "    Downloaded $((LINES - 1)) bottles + notes + food tags + menu calendar"
+log "    Downloaded $((LINES - 1)) bottles + notes + food tags + consumed + menu calendar"
 
 # --- PARSE (scripted) ---
 log "==> Parsing inventory and menu..."
@@ -84,8 +92,24 @@ PID_INV=$!
 python3 scripts/parse_menu.py data/menu.ics > data/menu.json &
 PID_MENU=$!
 
+if [[ -s data/consumed.tsv ]]; then
+  python3 scripts/parse_consumed.py data/consumed.tsv > data/consumed.json &
+  PID_CONSUMED_PARSE=$!
+fi
+
 wait $PID_INV || { log "ERROR: Inventory parse failed"; exit 1; }
 wait $PID_MENU || { log "ERROR: Menu parse failed"; exit 1; }
+if [[ -n "${PID_CONSUMED_PARSE:-}" ]]; then
+  wait "$PID_CONSUMED_PARSE" || { log "WARNING: Consumed parse failed — continuing without consumed data"; }
+fi
+
+# --- FETCH COMMUNITY NOTES (RSS) ---
+if [[ -n "${CT_COMMUNITY_NOTES_RSS:-}" ]]; then
+  log "==> Fetching community tasting notes (RSS)..."
+  CT_COMMUNITY_NOTES_RSS="${CT_COMMUNITY_NOTES_RSS}" python3 scripts/fetch_community_notes.py data/community_notes.json || log "WARNING: Community notes fetch failed — continuing without community notes"
+else
+  log "    Skipping community notes — CT_COMMUNITY_NOTES_RSS not configured"
+fi
 
 # --- GENERATE PLAN to staging (scripted — rules-based) ---
 # Build new plan in data/ first, only publish to site/ when complete with notes
@@ -95,7 +119,7 @@ python3 scripts/generate_plan.py data/inventory.json data/plan.json || { log "ER
 # --- GENERATE NOTES (LLM — Claude Code CLI, augmented with CT notes) ---
 if command -v claude &> /dev/null; then
   log "==> Generating tasting notes (Claude)..."
-  python3 scripts/generate_notes.py data/plan.json data/notes.tsv data/foodtags.tsv || log "WARNING: Note generation failed — plan will have empty notes"
+  python3 scripts/generate_notes.py data/plan.json data/notes.tsv data/foodtags.tsv data/community_notes.json || log "WARNING: Note generation failed — plan will have empty notes"
 else
   log "    Skipping note generation — claude CLI not available"
 fi
@@ -104,8 +128,16 @@ fi
 log "==> Comparing inventory vs plan..."
 python3 scripts/compare.py data/inventory.json data/plan.json > data/report.json || { log "ERROR: Compare failed"; exit 1; }
 
+# --- ENRICH MENU (LLM — Claude Code CLI) ---
+if command -v claude &> /dev/null; then
+  log "==> Enriching menu entries (Claude)..."
+  python3 scripts/enrich_menu.py data/menu.json data/menu_enriched.json data/menu_enriched_full.json || log "WARNING: Menu enrichment failed — pairing will use keyword matching only"
+else
+  log "    Skipping menu enrichment — claude CLI not available"
+fi
+
 log "==> Generating pairing suggestions..."
-python3 scripts/pairing.py data/menu.json data/plan.json data/inventory.json > data/pairing_suggestions.json || { log "ERROR: Pairing failed"; exit 1; }
+python3 scripts/pairing.py data/menu.json data/plan.json data/inventory.json data/menu_enriched_full.json > data/pairing_suggestions.json || { log "ERROR: Pairing failed"; exit 1; }
 
 # --- PUBLISH atomically (site always has a complete plan with notes) ---
 log "==> Publishing to site/..."
@@ -133,6 +165,10 @@ if [[ -n "${HA_SSH_TARGET:-}" ]] && [[ -f "${HA_SSH_KEY}" ]]; then
 else
   log "    Skipping Home Assistant push — HA_SSH_TARGET or SSH key not configured"
 fi
+
+# --- GENERATE DIGEST ---
+log "==> Generating morning digest..."
+python3 scripts/generate_digest.py || { RC=$?; if [ "$RC" -eq 2 ]; then log "    Digest: nothing to send (routine day)"; else log "WARNING: Digest generation failed"; fi; }
 
 log "==> Sync complete."
 

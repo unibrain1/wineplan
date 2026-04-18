@@ -23,8 +23,11 @@ nginx
 
 # Set up periodic sync with supercronic (runs as non-root)
 SCHEDULE="${SYNC_SCHEDULE:-0 2 * * *}"
+DIGEST_SCHEDULE="${DIGEST_SEND_SCHEDULE:-0 8 * * *}"
 echo "${SCHEDULE} cd /app && bash fetch_docker.sh" > /tmp/crontab
+echo "${DIGEST_SCHEDULE} cd /app && bash send_digest.sh" >> /tmp/crontab
 echo "    Scheduled sync: ${SCHEDULE}"
+echo "    Scheduled digest: ${DIGEST_SCHEDULE}"
 supercronic /tmp/crontab &
 
 # Run the pipeline once (site is already serving)

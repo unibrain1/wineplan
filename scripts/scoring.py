@@ -6,10 +6,14 @@ Symbols exported:
   seasonal_score        — seasonal fit penalty (0=perfect, 1=acceptable, 2=poor)
   seasonal_fit_score    — seasonal fit as a 0–100 float (higher = better fit)
   ct_score_component    — CellarTracker quality score normalized to 0–100
+  community_score       — community signals score from RSS notes (0–100)
   diversity_score       — diversity penalty based on proximity to similar placed wines (0–100)
   diversity_penalty     — linear decay helper for diversity scoring
   composite_score       — weighted combination of all components (lower = schedule sooner)
 """
+
+import re
+from datetime import datetime, timedelta
 
 from wine_utils import CURRENT_YEAR, TYPE_TO_BADGE
 
@@ -158,6 +162,93 @@ def ct_score_component(wine: dict) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Community signals scoring
+# ---------------------------------------------------------------------------
+
+# Regex patterns for window drift detection in community note bodies
+_DRIFT_DRINK_NOW = re.compile(
+    r"past\s+prime|fading|tired|over\s+the\s+hill|declining|drink\s+(it\s+)?now|"
+    r"peaked|losing|falling\s+apart|drying\s+out",
+    re.IGNORECASE,
+)
+_DRIFT_HOLD = re.compile(
+    r"needs?\s+time|closed|young|tight|tannic|too\s+young|years?\s+away|"
+    r"cellaring|not\s+ready",
+    re.IGNORECASE,
+)
+
+
+def community_score(
+    wine: dict, community_notes: dict[str, list[dict]] | None = None
+) -> float:
+    """Score based on community tasting note signals (0–100, higher = schedule sooner).
+
+    Combines three sub-signals:
+    - recent_score_mean: if recent scores diverge from CT avg, nudge accordingly
+    - note_velocity: many recent notes = people are drinking it now
+    - window_drift: text signals about readiness
+
+    Returns 50.0 (neutral) when no community data is available.
+    """
+    if not community_notes:
+        return 50.0
+
+    iwine = str(wine.get("iWine", ""))
+    notes = community_notes.get(iwine, [])
+    if not notes:
+        return 50.0
+
+    score = 50.0  # neutral baseline
+
+    # Sub-signal 1: recent score mean vs CT average
+    recent_scores = [n["score"] for n in notes[:10] if n.get("score") is not None]
+    if recent_scores:
+        ct = wine.get("CT") or AVG_CT
+        mean_recent = sum(recent_scores) / len(recent_scores)
+        diff = mean_recent - ct
+        # A 4+ point drop → bump urgency (might be disappointing)
+        # A 4+ point rise → quality is better than expected
+        if diff <= -4:
+            score += 10.0  # disappointing → drink sooner to clear
+        elif diff >= 4:
+            score += 5.0  # better than expected → slight bump
+
+    # Sub-signal 2: note velocity (notes in last 30 days)
+    cutoff = datetime.now().date() - timedelta(days=30)
+    recent_count = 0
+    for n in notes:
+        td_str = n.get("tasting_date")
+        if td_str:
+            try:
+                td = datetime.strptime(td_str, "%m/%d/%Y").date()
+                if td >= cutoff:
+                    recent_count += 1
+            except ValueError:
+                pass
+    if recent_count >= 5:
+        score += 10.0  # high velocity → people are drinking these now
+    elif recent_count >= 2:
+        score += 5.0
+
+    # Sub-signal 3: window drift from note text
+    drink_now_hits = 0
+    hold_hits = 0
+    for n in notes[:10]:
+        body = n.get("body") or ""
+        if _DRIFT_DRINK_NOW.search(body):
+            drink_now_hits += 1
+        if _DRIFT_HOLD.search(body):
+            hold_hits += 1
+
+    if drink_now_hits > hold_hits:
+        score += 10.0  # community says drink now
+    elif hold_hits > drink_now_hits:
+        score -= 10.0  # community says hold
+
+    return max(0.0, min(100.0, score))
+
+
+# ---------------------------------------------------------------------------
 # Diversity scoring
 # ---------------------------------------------------------------------------
 
@@ -213,9 +304,10 @@ def diversity_score(wine: dict, week_index: int, placed: list[dict | None]) -> f
 
 W_WINDOW = 0.50
 W_SEASON = 0.25
-W_DIVERSITY = 0.15
+W_DIVERSITY = 0.10
 W_CT = 0.10
-# Weights must sum to 1.0: 0.50 + 0.25 + 0.15 + 0.10 = 1.00
+W_COMMUNITY = 0.05
+# Weights must sum to 1.0: 0.50 + 0.25 + 0.10 + 0.10 + 0.05 = 1.00
 
 
 def composite_score(
@@ -223,6 +315,7 @@ def composite_score(
     season: str,
     week_index: int,
     placed: list[dict | None],
+    community_notes: dict[str, list[dict]] | None = None,
 ) -> float:
     """Weighted composite of all scoring components. Lower = schedule sooner.
 
@@ -234,8 +327,13 @@ def composite_score(
     seasonal = seasonal_fit_score(wine, season)
     diversity = diversity_score(wine, week_index, placed)
     ct = ct_score_component(wine)
+    comm = community_score(wine, community_notes)
 
     desirability = (
-        W_WINDOW * window + W_SEASON * seasonal + W_DIVERSITY * diversity + W_CT * ct
+        W_WINDOW * window
+        + W_SEASON * seasonal
+        + W_DIVERSITY * diversity
+        + W_CT * ct
+        + W_COMMUNITY * comm
     )
     return 100.0 - desirability

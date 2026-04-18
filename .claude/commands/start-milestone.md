@@ -22,7 +22,7 @@ Begin work on a milestone by creating a milestone branch from main.
    git status --porcelain
    ```
 
-   If there are uncommitted changes, stop and ask the user to commit or stash first.
+   If uncommitted changes exist, stop and ask the user to commit or stash.
 
 3. **Create the milestone branch from main**:
 
@@ -33,27 +33,21 @@ Begin work on a milestone by creating a milestone branch from main.
    git push -u origin milestone/$ARGUMENTS
    ```
 
-4. **List the milestone's open issues** for context:
+4. **List the milestone's open issues**:
 
    ```bash
    gh issue list --milestone "<full milestone title>" --state open --json number,title,labels,body
    ```
 
-5. **Recommend an issue order** by analyzing all the issues and determining the best sequence to address them. Consider:
-   - **Dependencies** — issues that other issues depend on should come first (e.g., a data model change before a feature that uses it)
-   - **Severity** — CRITICAL before HIGH before MEDIUM before LOW
-   - **Shared code paths** — group issues that touch the same files to minimize merge conflicts
-   - **Foundation first** — pipeline/utility changes before site/presentation changes
+5. **Recommend an issue order** based on:
+   - Dependencies (foundational changes first)
+   - Severity (CRITICAL → HIGH → MEDIUM → LOW)
+   - Shared code paths (group to minimize merge conflicts)
+   - Pipeline/utility before site/presentation
 
-   Present the recommended order as a numbered list with a brief rationale for each position.
+   Present as a numbered list with brief rationale.
 
-   Additionally, flag issues that warrant special tools:
-   - Issues touching `CLAUDE.md` scope: new scripts, pipeline flow, env vars, deployment, plan rules, pairing engine
-   - Issues touching `scripts/pairing.py` or `scripts/wine_keywords.py`: recommend running `/pairing-audit` before and after implementation
-   - Issues touching any `scripts/*.py` or pipeline shell scripts: the `pipeline-reviewer` subagent will be launched automatically during `/start-issue`
-
-6. **Output a summary** showing:
+6. **Output**:
    - The milestone branch name
-   - The recommended issue order (from step 5)
-   - Any special tool recommendations per issue (from flagging above)
-   - Instructions: "Use `/start-issue <number>` to begin work on the first issue"
+   - The recommended issue order
+   - "Use `/start-issue <number>` to begin work on the first issue"

@@ -171,9 +171,15 @@ function renderPairingsHtml(pairings) {
     } else {
       cls = 'partial'; icon = '—'; detail = 'enjoy the planned wine';
     }
+    var conf = s.pairing.confidence;
+    var confBadge = '';
+    if (conf === 'high' || conf === 'medium' || conf === 'low') {
+      var label = conf === 'medium' ? 'med' : conf;
+      confBadge = ' <span class="confidence-badge ' + conf + '">' + label + '</span>';
+    }
     html += '<div class="pairing-row ' + cls + '">' +
       '<span class="pairing-icon">' + icon + '</span>' +
-      '<div><span class="pairing-meal">' + p.dayName + ': ' + s.meal + '</span>' +
+      '<div><span class="pairing-meal">' + p.dayName + ': ' + s.meal + '</span>' + confBadge +
       (detail ? '<div class="pairing-detail">' + detail + '</div>' : '') +
       '</div></div>';
   }
