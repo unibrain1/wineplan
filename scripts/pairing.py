@@ -100,6 +100,10 @@ def find_best_bottle(
     for wine in inventory:
         if not wine_matches_styles(wine, all_preferred):
             continue
+        # Skip dessert/sweet wines for savory food pairings
+        wine_type = (wine.get("Type") or "").lower()
+        if "dessert" in wine_type or "sweet" in wine_type:
+            continue
         # Skip bottles already suggested for another meal
         wine_key = f"{wine.get('Vintage', '')} {wine.get('Wine', '')}"
         if wine_key in exclude:
