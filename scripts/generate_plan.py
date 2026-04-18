@@ -661,8 +661,11 @@ def _load_community_notes() -> dict[str, list[dict]] | None:
     if cn_path.exists() and cn_path.stat().st_size > 0:
         try:
             return json.loads(cn_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError) as exc:
+            print(
+                f"WARNING: Could not load community notes: {exc}",
+                file=sys.stderr,
+            )
     return None
 
 

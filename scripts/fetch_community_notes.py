@@ -175,11 +175,18 @@ def fetch_community_notes(rss_url: str, cache_path: Path) -> None:
     cache = load_cache(cache_path)
     cache, added = merge_notes(cache, new_notes)
 
-    # Write
+    # Write atomically (tmp + rename) to protect cumulative cache from partial writes
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(
-        json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    tmp_path = cache_path.with_suffix(".tmp")
+    try:
+        tmp_path.write_text(
+            json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        tmp_path.replace(cache_path)
+    except OSError as e:
+        print(f"ERROR: Failed to write community notes cache: {e}", file=sys.stderr)
+        tmp_path.unlink(missing_ok=True)
+        sys.exit(1)
 
     total = sum(len(v) for v in cache.values())
     wines = len(cache)
