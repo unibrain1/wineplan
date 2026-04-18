@@ -68,7 +68,7 @@ def load_inventory_index(inv_path: str | None) -> dict[str, str]:
         for wine in inventory:
             key = f"{wine.get('Vintage', '')}|{wine.get('Wine', '')}".lower()
             index[key] = str(wine.get("iWine", ""))
-    except (json.JSONDecodeError, OSError) as e:
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         print(f"WARNING: Could not load inventory index: {e}", file=sys.stderr)
     return index
 
