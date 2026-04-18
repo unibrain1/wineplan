@@ -50,6 +50,8 @@ site/                         — Served by nginx (data + presentation + style s
   plan.json                   — Plan data: allWeeks, quarterInfo, changelog (generated)
   pairing_suggestions.json    — Pairing suggestions (generated)
   report.json                 — Inventory diff report (generated)
+  digest.json                 — Morning digest data (generated, today's wine + pairings)
+  digest.html                 — Morning digest email body (generated)
 scripts/
   plan_config.py              — Holidays + evolution tracks (gitignored, personal)
   plan_config.py.sample       — Template for plan_config.py
@@ -67,8 +69,16 @@ scripts/
   parse_menu.py               — menu.ics → menu.json (Google Calendar .ics feed)
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
+  thisweek.py                 — Find current week's entry from plan.json (used by HA integration)
 tests/
   test_scoring.py             — Unit tests for all scoring components
+  test_pairing_enriched.py    — Tests for enriched food-wine pairing
+  test_enrich_menu.py         — Tests for LLM menu enrichment
+  test_fetch_community_notes.py — Tests for RSS community notes fetch
+  test_parse_consumed.py      — Tests for consumption history parsing
+  test_parse_inventory.py     — Tests for inventory parsing
+  test_generate_digest.py     — Tests for morning digest generation
+  test_send_digest.py         — Tests for digest email sending
 docs/
   menu-guide.md               — How to write menu entries for best pairing results
 plans/                        — Design specs and algorithm proposals (gitignored)
@@ -85,6 +95,7 @@ pyrightconfig.json            — Pyright type checking config
 pipeline.sh                   — Shared pipeline logic (sourced by fetch.sh and fetch_docker.sh)
 fetch.sh                      — Local pipeline entry point
 fetch_docker.sh               — Docker pipeline entry point
+send_digest.sh                — Wrapper: resolves SMTP creds from 1Password, runs send_digest.py
 Dockerfile                    — Python 3.12 + nginx + 1Password + Claude CLI + supercronic + git
 docker-compose.yml            — the-sommelier on port 8089 + Traefik proxy + run-now profile
 entrypoint.sh                 — git pull, starts nginx, schedules cron, runs initial sync
@@ -137,7 +148,7 @@ Code changes pushed to GitHub are picked up automatically on next `down/up` or s
 
 - **CellarTracker is the system of record** for all wine metadata: Type/badge, Varietal, Appellation, scores, drinking windows, quantity.
 - **Scripted rules** handle: plan generation (scheduling, priority, seasonal fit, evolution, holidays), inventory comparison, food-wine pairing suggestions.
-- **Claude (LLM)** handles: tasting note generation only. Notes are contextual 1-2 sentence descriptions augmented with CellarTracker notes and food tags. If Claude CLI is unavailable, the pipeline continues with empty notes.
+- **Claude (LLM)** handles: tasting note generation and menu enrichment. Notes are contextual 1-2 sentence descriptions augmented with CellarTracker notes and food tags. Menu enrichment extracts structured food features (protein, preparation, richness, etc.) for pairing. If Claude CLI is unavailable, the pipeline continues with empty notes and falls back to keyword-based pairing.
 
 ## Architecture: Data / Presentation / Style
 

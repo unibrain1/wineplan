@@ -63,16 +63,20 @@ The more descriptive the meal title, the more keywords get extracted and the bet
 ## How Pairing Works
 
 1. The pipeline extracts food keywords from your calendar events
-2. Each keyword maps to preferred wine styles (e.g., "ribs" → bold red)
-3. If the planned wine for that week doesn't match, The Sommelier suggests a specific bottle from your cellar
-4. Suggestions prioritize bottles that need drinking (past peak, expiring soon)
-5. Each meal gets a unique suggestion — no bottle is recommended twice
+2. An LLM enrichment step extracts structured food features (protein, preparation, richness, spice, acidity, cuisine) for deeper matching
+3. The pairing engine tries enriched features first, falls back to keyword matching, then falls back to neutral
+4. If the planned wine for that week doesn't match, The Sommelier suggests a specific bottle from your cellar
+5. Suggestions prioritize bottles that need drinking (past peak, expiring soon)
+6. Each meal gets a unique suggestion — no bottle is recommended twice
+7. Each pairing includes a confidence level (high/medium/low) based on signal strength
 
 ## What You'll See on the Plan
 
 - **Pairs Well** (green, wine icon) — the planned wine matches your meal
 - **Sommelier Pick** (blue, wine icon) — a specific bottle suggestion from your cellar
 - **No Match** (muted) — no food keywords matched, enjoy the planned wine
+
+Each pairing shows a confidence badge (high, med, low) indicating how many food features or keywords matched.
 
 ## Recognized Keywords
 
@@ -89,4 +93,4 @@ salad, soup, pasta, risotto, pizza, taco, tacos, burrito, enchilada, quesadilla,
 
 ## Not Yet Supported
 
-Specific sauces, spice levels, side dishes as standalone entries, and desserts are not matched in the current POC. These will come with a richer pairing engine later.
+Side dishes as standalone entries and desserts are not matched. Sauces, spice levels, and cooking methods are now handled by the LLM enrichment step, which extracts structured food features for more nuanced pairing.
