@@ -52,13 +52,7 @@ CT_PASSWORD=$(op read "$PASSWORD") || { log "ERROR: Failed to resolve CellarTrac
 GOOGLE_CALENDAR_ICS_URL=$(op read "$GOOGLE_CALENDAR_ICS_URL") || { log "ERROR: Failed to resolve Google Calendar URL from 1Password"; exit 1; }
 export CLAUDE_CODE_OAUTH_TOKEN
 CLAUDE_CODE_OAUTH_TOKEN=$(op read "$CLAUDE_CODE_OAUTH_TOKEN") || { log "WARNING: Failed to resolve Claude OAuth token from 1Password"; }
-CT_COMMUNITY_NOTES_CK=$(op read "${CT_COMMUNITY_NOTES_RSS:-}") || { log "WARNING: Failed to resolve community notes RSS CK token from 1Password — continuing without community notes"; CT_COMMUNITY_NOTES_CK=""; }
-# Construct full RSS URL from CK token if resolved
-if [[ -n "${CT_COMMUNITY_NOTES_CK}" ]]; then
-  CT_COMMUNITY_NOTES_RSS="https://www.cellartracker.com/rssnote.asp?CK=${CT_COMMUNITY_NOTES_CK}"
-else
-  CT_COMMUNITY_NOTES_RSS=""
-fi
+CT_COMMUNITY_NOTES_RSS=$(op read "${CT_COMMUNITY_NOTES_RSS:-}") || { log "WARNING: Failed to resolve community notes RSS URL from 1Password — continuing without community notes"; CT_COMMUNITY_NOTES_RSS=""; }
 export SMTP_USERNAME SMTP_PASSWORD DIGEST_RECIPIENTS
 SMTP_USERNAME=$(op read "${SMTP_USERNAME:-}") || { log "WARNING: Failed to resolve SMTP username — digest email disabled"; SMTP_USERNAME=""; }
 SMTP_PASSWORD=$(op read "${SMTP_PASSWORD:-}") || { log "WARNING: Failed to resolve SMTP password — digest email disabled"; SMTP_PASSWORD=""; }
