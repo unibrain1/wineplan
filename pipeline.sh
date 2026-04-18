@@ -52,6 +52,7 @@ CT_PASSWORD=$(op read "$PASSWORD") || { log "ERROR: Failed to resolve CellarTrac
 GOOGLE_CALENDAR_ICS_URL=$(op read "$GOOGLE_CALENDAR_ICS_URL") || { log "ERROR: Failed to resolve Google Calendar URL from 1Password"; exit 1; }
 export CLAUDE_CODE_OAUTH_TOKEN
 CLAUDE_CODE_OAUTH_TOKEN=$(op read "$CLAUDE_CODE_OAUTH_TOKEN") || { log "WARNING: Failed to resolve Claude OAuth token from 1Password"; }
+CT_COMMUNITY_NOTES_RSS=$(op read "$CT_COMMUNITY_NOTES_RSS") || { log "WARNING: Failed to resolve community notes RSS URL from 1Password — continuing without community notes"; }
 
 CT_BASE="https://www.cellartracker.com/xlquery.asp?User=${CT_USERNAME}&Password=${CT_PASSWORD}&Format=tab"
 
@@ -99,6 +100,14 @@ if [[ -n "${PID_CONSUMED_PARSE:-}" ]]; then
   wait "$PID_CONSUMED_PARSE" || { log "WARNING: Consumed parse failed — continuing without consumed data"; }
 fi
 
+# --- FETCH COMMUNITY NOTES (RSS) ---
+if [[ -n "${CT_COMMUNITY_NOTES_RSS:-}" ]]; then
+  log "==> Fetching community tasting notes (RSS)..."
+  CT_COMMUNITY_NOTES_RSS="${CT_COMMUNITY_NOTES_RSS}" python3 scripts/fetch_community_notes.py data/community_notes.json || log "WARNING: Community notes fetch failed — continuing without community notes"
+else
+  log "    Skipping community notes — CT_COMMUNITY_NOTES_RSS not configured"
+fi
+
 # --- GENERATE PLAN to staging (scripted — rules-based) ---
 # Build new plan in data/ first, only publish to site/ when complete with notes
 log "==> Generating plan..."
@@ -107,7 +116,7 @@ python3 scripts/generate_plan.py data/inventory.json data/plan.json || { log "ER
 # --- GENERATE NOTES (LLM — Claude Code CLI, augmented with CT notes) ---
 if command -v claude &> /dev/null; then
   log "==> Generating tasting notes (Claude)..."
-  python3 scripts/generate_notes.py data/plan.json data/notes.tsv data/foodtags.tsv || log "WARNING: Note generation failed — plan will have empty notes"
+  python3 scripts/generate_notes.py data/plan.json data/notes.tsv data/foodtags.tsv data/community_notes.json || log "WARNING: Note generation failed — plan will have empty notes"
 else
   log "    Skipping note generation — claude CLI not available"
 fi

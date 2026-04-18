@@ -381,6 +381,7 @@ def _pick_best_for_slot(
     placed: list[dict | None] | None = None,
     exclude_keys: set[str] | None = None,
     required_fragment: str | None = None,
+    community_notes: dict[str, list[dict]] | None = None,
 ) -> dict | None:
     """Pick the best available bottle for a given slot using composite scoring."""
     exclude_keys = exclude_keys or set()
@@ -402,7 +403,7 @@ def _pick_best_for_slot(
 
     pool.sort(
         key=lambda w: (
-            composite_score(w, season, week_index, placed or []),
+            composite_score(w, season, week_index, placed or [], community_notes),
             w.get("EndConsume") or 9999,
             w.get("Wine", ""),
         )
@@ -654,12 +655,27 @@ def schedule_evolution_tracks(
             }
 
 
+def _load_community_notes() -> dict[str, list[dict]] | None:
+    """Load community notes cache if available."""
+    cn_path = Path("data/community_notes.json")
+    if cn_path.exists() and cn_path.stat().st_size > 0:
+        try:
+            return json.loads(cn_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            print(
+                f"WARNING: Could not load community notes: {exc}",
+                file=sys.stderr,
+            )
+    return None
+
+
 def generate_plan(inventory: list[dict]) -> dict:
     """Generate the full 52-week plan from inventory data."""
     today = date.today()
     start = monday_of_week(today)
     week_dates = generate_week_dates(start)
 
+    community_notes = _load_community_notes()
     candidates = build_candidates(inventory)
 
     # Track how many bottles of each wine we've already scheduled
@@ -731,6 +747,7 @@ def generate_plan(inventory: list[dict]) -> dict:
                 max_urgency=1,
                 week_index=i,
                 placed=placed,
+                community_notes=community_notes,
             )
         elif i < 16:
             # Phase B: expiring this/next year
@@ -741,6 +758,7 @@ def generate_plan(inventory: list[dict]) -> dict:
                 max_urgency=2,
                 week_index=i,
                 placed=placed,
+                community_notes=community_notes,
             )
         else:
             # Phase C: composite scoring
@@ -750,6 +768,7 @@ def generate_plan(inventory: list[dict]) -> dict:
                 season,
                 week_index=i,
                 placed=placed,
+                community_notes=community_notes,
             )
 
         if wine is None:
@@ -760,6 +779,7 @@ def generate_plan(inventory: list[dict]) -> dict:
                 season,
                 week_index=i,
                 placed=placed,
+                community_notes=community_notes,
             )
 
         if wine is None:
@@ -790,6 +810,7 @@ def _pick_for_urgent_phase(
     max_urgency: int,
     week_index: int = 0,
     placed: list[dict | None] | None = None,
+    community_notes: dict[str, list[dict]] | None = None,
 ) -> dict | None:
     """Pick the best bottle at or below *max_urgency* tier, sorted by composite score."""
     pool = []
@@ -803,7 +824,7 @@ def _pick_for_urgent_phase(
         return None
     pool.sort(
         key=lambda w: (
-            composite_score(w, season, week_index, placed or []),
+            composite_score(w, season, week_index, placed or [], community_notes),
             w.get("EndConsume") or 9999,
             w.get("Wine", ""),
         )

@@ -17,6 +17,7 @@ Formula reference (from scoring.py):
 import pytest
 
 from scoring import (
+    community_score,
     composite_score,
     ct_score_component,
     diversity_score,
@@ -644,9 +645,11 @@ class TestCompositeScore:
         assert summer_score > winter_score  # summer = worse fit for bold red
 
     def test_weights_sum_to_one(self):
-        from scoring import W_CT, W_DIVERSITY, W_SEASON, W_WINDOW
+        from scoring import W_COMMUNITY, W_CT, W_DIVERSITY, W_SEASON, W_WINDOW
 
-        assert W_WINDOW + W_SEASON + W_DIVERSITY + W_CT == pytest.approx(1.0)
+        assert W_WINDOW + W_SEASON + W_DIVERSITY + W_CT + W_COMMUNITY == pytest.approx(
+            1.0
+        )
 
     def test_empty_placed_list(self):
         # Should work with empty placed list (diversity defaults to 100)
@@ -661,3 +664,83 @@ class TestCompositeScore:
         w = self._past_peak_wine()
         score = composite_score(w, "winter", 0, [])
         assert score < 50.0  # should be well below midpoint
+
+
+# ---------------------------------------------------------------------------
+# TestCommunityScore
+# ---------------------------------------------------------------------------
+
+
+class TestCommunityScore:
+    """community_score() returns 0–100 based on RSS community note signals."""
+
+    def _wine(self, iwine="123", ct=90):
+        return {"iWine": iwine, "CT": ct}
+
+    def _note(self, score=None, body="", tasting_date=None):
+        return {
+            "iWine": "123",
+            "iNote": "1",
+            "author": "tester",
+            "score": score,
+            "body": body,
+            "tasting_date": tasting_date,
+        }
+
+    def test_no_community_data_returns_neutral(self):
+        assert community_score(self._wine(), None) == pytest.approx(50.0)
+
+    def test_empty_community_data_returns_neutral(self):
+        assert community_score(self._wine(), {}) == pytest.approx(50.0)
+
+    def test_no_notes_for_wine_returns_neutral(self):
+        # Community data exists but not for this wine
+        cn = {"999": [self._note(score=90)]}
+        assert community_score(self._wine(), cn) == pytest.approx(50.0)
+
+    def test_disappointing_scores_bump_urgency(self):
+        # CT=90, recent scores averaging 85 → 5 point drop → bump
+        cn = {"123": [self._note(score=85) for _ in range(5)]}
+        score = community_score(self._wine(ct=90), cn)
+        assert score > 50.0  # bumped up
+
+    def test_better_than_expected_scores(self):
+        # CT=85, recent scores averaging 92 → positive surprise
+        cn = {"123": [self._note(score=92) for _ in range(5)]}
+        score = community_score(self._wine(ct=85), cn)
+        assert score > 50.0
+
+    def test_drink_now_text_bumps_score(self):
+        cn = {"123": [self._note(body="This wine is past prime, fading fast.")]}
+        score = community_score(self._wine(), cn)
+        assert score > 50.0
+
+    def test_hold_text_reduces_score(self):
+        cn = {"123": [self._note(body="Needs time. Too young and tight.")]}
+        score = community_score(self._wine(), cn)
+        assert score < 50.0
+
+    def test_score_clamped_to_range(self):
+        # Stack all positive signals
+        cn = {
+            "123": [
+                self._note(
+                    score=80, body="past prime, fading", tasting_date="12/1/2099"
+                )
+                for _ in range(10)
+            ]
+        }
+        score = community_score(self._wine(ct=90), cn)
+        assert 0.0 <= score <= 100.0
+
+    def test_mixed_drift_signals_cancel_out(self):
+        cn = {
+            "123": [
+                self._note(body="past prime"),
+                self._note(body="needs time"),
+            ]
+        }
+        # Equal drink-now and hold hits → no drift adjustment
+        score = community_score(self._wine(), cn)
+        # Should be close to neutral (only other sub-signals may apply)
+        assert 40.0 <= score <= 60.0
