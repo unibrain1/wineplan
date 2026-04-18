@@ -164,12 +164,13 @@ class TestFormatDigestHtml:
         assert "Dion Vineyard Pinot Noir" in html
         assert "2020" in html
 
-    def test_contains_pairing_info(self):
+    def test_good_pairing_shows_no_swap_needed(self):
         digest = {
             "date": "2026-04-18",
             "date_display": "Friday, April 18, 2026",
             "has_content": True,
             "wine": None,
+            "tonight": None,
             "pairings": [
                 {
                     "meal": "Grilled chicken",
@@ -179,14 +180,25 @@ class TestFormatDigestHtml:
         }
         html = format_digest_html(digest)
         assert "Grilled chicken" in html
-        assert "Planned wine pairs well" in html
+        assert "no swap needed" in html
 
-    def test_sommelier_suggestion_rendered(self):
+    def test_tonight_suggestion_is_primary(self):
         digest = {
             "date": "2026-04-18",
             "date_display": "Friday, April 18, 2026",
             "has_content": True,
             "wine": None,
+            "tonight": {
+                "meal": "Pasta",
+                "bottle": {
+                    "vintage": "2018",
+                    "wine": "Laurène Pinot Noir",
+                    "type": "Red",
+                    "window": "2022–2031",
+                    "urgency": "in peak window",
+                },
+                "pairing": {"score": "poor", "details": "no match"},
+            },
             "pairings": [
                 {
                     "meal": "Pasta",
@@ -201,7 +213,7 @@ class TestFormatDigestHtml:
             ],
         }
         html = format_digest_html(digest)
-        assert "Sommelier Suggests" in html
+        assert "Pull for Tonight" in html
         assert "Laurène Pinot Noir" in html
 
     def test_urgent_wine_shows_warning(self):

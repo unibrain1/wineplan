@@ -59,11 +59,24 @@ def build_digest(
 
     has_content = len(today_pairings) > 0
 
+    # Find tonight's top suggestion (the actionable "go pull this bottle" item)
+    tonight_suggestion = None
+    for p in today_pairings:
+        sb = p.get("suggested_bottle")
+        if sb:
+            tonight_suggestion = {
+                "meal": p.get("meal", ""),
+                "bottle": sb,
+                "pairing": p.get("pairing", {}),
+            }
+            break
+
     digest: dict = {
         "date": today_str,
         "date_display": today.strftime("%A, %B %-d, %Y"),
         "has_content": has_content,
         "wine": None,
+        "tonight": tonight_suggestion,
         "pairings": today_pairings,
     }
 
@@ -104,12 +117,92 @@ def _pairing_color(score: str) -> str:
 
 
 def format_digest_html(digest: dict) -> str:
-    """Format the digest as a branded HTML email."""
+    """Format the digest as a branded HTML email.
+
+    Structure: tonight's dinner recommendation first (action item),
+    then this week's planned wine (context).
+    """
     wine = digest.get("wine")
+    tonight = digest.get("tonight")
     pairings = digest.get("pairings", [])
     date_display = digest.get("date_display", digest["date"])
 
-    # Wine section
+    # Tonight's dinner section (primary — the action item)
+    tonight_html = ""
+    if tonight:
+        sb = tonight["bottle"]
+        meal = tonight["meal"]
+        pairing = tonight["pairing"]
+        score = pairing.get("score", "neutral")
+        color = _pairing_color(score)
+        status_icon = {"good": "✅", "partial": "🟡", "poor": "❌"}.get(score, "—")
+
+        sb_badge = sb.get("type", "red").lower()
+        if "rose" in sb_badge or "rosé" in sb_badge:
+            sb_badge = "rose"
+        elif "sparkling" in sb_badge:
+            sb_badge = "sparkling"
+        elif "white" in sb_badge:
+            sb_badge = "white"
+        else:
+            sb_badge = "red"
+        badge_color = _badge_color(sb_badge)
+        badge_icon = _badge_icon(sb_badge)
+
+        sb_meta_parts = []
+        if sb.get("window"):
+            sb_meta_parts.append(f"Window: {sb['window']}")
+        if sb.get("urgency"):
+            sb_meta_parts.append(sb["urgency"])
+        if sb.get("location"):
+            sb_meta_parts.append(f"Location: {sb['location']}")
+        sb_meta = " &nbsp;·&nbsp; ".join(sb_meta_parts)
+
+        urgent_html = ""
+        if sb.get("urgency") and "past peak" in sb.get("urgency", "").lower():
+            urgent_html = '<div style="color:#d9534f;font-size:13px;font-weight:600;margin-top:6px;">⚠ Past peak — drink now</div>'
+
+        tonight_html = f"""
+<tr><td style="padding:28px 32px 0;">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#325d88;font-weight:600;margin-bottom:10px;">🍽 Pull for Tonight</div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#e8eef4;border-radius:8px;border:1px solid #c5d5e4;">
+  <tr><td style="padding:20px 24px;">
+    <table cellpadding="0" cellspacing="0"><tr>
+      <td style="vertical-align:top;padding-right:14px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:{badge_color};text-align:center;line-height:36px;font-size:16px;">{badge_icon}</div>
+      </td>
+      <td>
+        <div style="font-size:20px;font-weight:600;color:#3e3f3a;">{sb.get("vintage")} {sb.get("wine")}</div>
+        <div style="color:#8e8c84;font-size:14px;margin-top:4px;">{sb_meta}</div>
+        {urgent_html}
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #c5d5e4;">
+          <div style="font-size:14px;color:#3e3f3a;"><strong>Dinner:</strong> {meal}</div>
+          <div style="color:{color};font-size:13px;margin-top:3px;">{status_icon} Planned wine is a {score} match — the sommelier suggests this instead</div>
+        </div>
+      </td>
+    </tr></table>
+  </td></tr>
+  </table>
+</td></tr>"""
+    elif pairings:
+        # No suggestion — planned wine pairs well, show the meal
+        p = pairings[0]
+        meal = p.get("meal", "")
+        pairing = p.get("pairing", {})
+        score = pairing.get("score", "neutral")
+        status_icon = {"good": "✅", "partial": "🟡", "poor": "❌"}.get(score, "—")
+        tonight_html = f"""
+<tr><td style="padding:28px 32px 0;">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#325d88;font-weight:600;margin-bottom:10px;">🍽 Tonight's Dinner</div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f7e6;border-radius:8px;border:1px solid #c5dba8;">
+  <tr><td style="padding:16px 20px;">
+    <div style="font-size:16px;font-weight:500;">{meal}</div>
+    <div style="color:#5cb85c;font-size:13px;margin-top:4px;">{status_icon} The planned wine pairs well — no swap needed</div>
+  </td></tr>
+  </table>
+</td></tr>"""
+
+    # This week's wine section (secondary — context)
     wine_html = ""
     if wine:
         badge_color = _badge_color(wine["badge"])
@@ -132,72 +225,23 @@ def format_digest_html(digest: dict) -> str:
             note_html = f'<div style="color:#3e3f3a;font-size:14px;margin-top:8px;line-height:1.5;font-style:italic;">{wine["note"]}</div>'
 
         wine_html = f"""
-<tr><td style="padding:28px 32px 0;">
-  <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#8e8c84;font-weight:600;margin-bottom:10px;">Tonight's Wine</div>
+<tr><td style="padding:20px 32px 0;">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#8e8c84;font-weight:600;margin-bottom:10px;">This Week's Selection</div>
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f5f0;border-radius:8px;border:1px solid #dfd7ca;">
-  <tr><td style="padding:20px 24px;">
+  <tr><td style="padding:16px 20px;">
     <table cellpadding="0" cellspacing="0"><tr>
-      <td style="vertical-align:top;padding-right:14px;">
-        <div style="width:36px;height:36px;border-radius:50%;background:{badge_color};text-align:center;line-height:36px;font-size:16px;">{badge_icon}</div>
+      <td style="vertical-align:top;padding-right:12px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:{badge_color};text-align:center;line-height:28px;font-size:13px;">{badge_icon}</div>
       </td>
       <td>
-        <div style="font-size:20px;font-weight:600;color:#3e3f3a;">{wine["vintage"]} {wine["name"]}</div>
-        <div style="color:#8e8c84;font-size:14px;margin-top:4px;">{meta_html}</div>
+        <div style="font-size:16px;font-weight:600;color:#3e3f3a;">{wine["vintage"]} {wine["name"]}</div>
+        <div style="color:#8e8c84;font-size:13px;margin-top:3px;">{meta_html}</div>
         {urgent_html}
         {note_html}
       </td>
     </tr></table>
   </td></tr>
   </table>
-</td></tr>"""
-
-    # Pairings section
-    pairings_html = ""
-    if pairings:
-        cards = []
-        for p in pairings:
-            meal = p.get("meal", "")
-            pairing = p.get("pairing", {})
-            score = pairing.get("score", "neutral")
-            color = _pairing_color(score)
-
-            status_icon = {"good": "✅", "partial": "🟡", "poor": "❌"}.get(score, "—")
-            status_text = {
-                "good": "Planned wine pairs well",
-                "partial": "Partial match with planned wine",
-                "poor": "No match with planned wine",
-                "neutral": "Enjoy the planned wine",
-            }.get(score, pairing.get("details", ""))
-
-            suggestion_html = ""
-            sb = p.get("suggested_bottle")
-            if sb:
-                sb_meta = f"Window: {sb.get('window', '?')}"
-                if sb.get("urgency"):
-                    sb_meta += f" · {sb['urgency']}"
-                suggestion_html = f"""
-      <div style="background:#d6dfe7;border-radius:6px;padding:10px 14px;margin-top:8px;">
-        <div style="font-size:12px;color:#325d88;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Sommelier Suggests</div>
-        <div style="font-size:14px;font-weight:500;margin-top:4px;">{sb.get("vintage")} {sb.get("wine")}</div>
-        <div style="font-size:12px;color:#8e8c84;margin-top:2px;">{sb_meta}</div>
-      </div>"""
-
-            cards.append(f"""
-  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;border-radius:8px;border:1px solid #dfd7ca;overflow:hidden;">
-  <tr>
-    <td width="4" style="background:{color};"></td>
-    <td style="padding:14px 18px;">
-      <div style="font-size:15px;font-weight:500;">{meal}</div>
-      <div style="color:{color};font-size:13px;margin-top:3px;">{status_icon} {status_text}</div>
-      {suggestion_html}
-    </td>
-  </tr>
-  </table>""")
-
-        pairings_html = f"""
-<tr><td style="padding:24px 32px 0;">
-  <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#8e8c84;font-weight:600;margin-bottom:10px;">Tonight's Menu</div>
-  {"".join(cards)}
 </td></tr>"""
 
     return f"""<!DOCTYPE html>
@@ -216,8 +260,8 @@ def format_digest_html(digest: dict) -> str:
   </div>
 </td></tr>
 
+{tonight_html}
 {wine_html}
-{pairings_html}
 
 <tr><td style="padding:28px 32px;text-align:center;">
   <div style="color:#c5bdb0;font-size:12px;">

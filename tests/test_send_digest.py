@@ -4,7 +4,20 @@ from send_digest import already_sent_today, build_email, mark_sent
 
 
 class TestBuildEmail:
-    def test_subject_includes_wine_name(self):
+    def test_subject_uses_tonight_suggestion_when_available(self):
+        digest = {
+            "wine": {"vintage": "2020", "name": "Dion Vineyard Pinot Noir"},
+            "tonight": {
+                "bottle": {"vintage": "2010", "wine": "Vin Santo"},
+                "meal": "Pasta",
+                "pairing": {"score": "partial"},
+            },
+        }
+        msg = build_email(digest, "<html>body</html>", "from@test.com", ["to@test.com"])
+        assert "Vin Santo" in msg["Subject"]
+        assert "pull" in msg["Subject"]
+
+    def test_subject_falls_back_to_weekly_wine(self):
         digest = {
             "wine": {"vintage": "2020", "name": "Dion Vineyard Pinot Noir"},
         }

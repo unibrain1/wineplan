@@ -48,8 +48,12 @@ def build_email(
     digest: dict, html_body: str, sender: str, recipients: list[str]
 ) -> MIMEMultipart:
     """Build the email message with HTML body."""
+    tonight = digest.get("tonight")
     wine = digest.get("wine")
-    if wine:
+    if tonight:
+        sb = tonight["bottle"]
+        subject = f"Tonight: pull {sb.get('vintage')} {sb.get('wine')}"
+    elif wine:
         subject = f"Tonight: {wine['vintage']} {wine['name']}"
     else:
         subject = "The Sommelier — Daily Digest"
