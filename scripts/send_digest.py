@@ -135,7 +135,7 @@ def main() -> None:
 
     try:
         send_email(msg, smtp_username, smtp_password)
-    except smtplib.SMTPException as e:
+    except (smtplib.SMTPException, OSError) as e:
         print(f"ERROR: Failed to send digest email: {e}", file=sys.stderr)
         sys.exit(1)
 

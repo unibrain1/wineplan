@@ -5,7 +5,8 @@ Polls rssnote.asp using a personal CK token, parses each <item> into
 structured note records, and appends to a cumulative JSON cache keyed
 by iWine. Never overwrites — only adds new notes (deduped by iNote).
 
-Usage: fetch_community_notes.py <rss_url> [community_notes.json]
+Usage: fetch_community_notes.py [community_notes.json]
+Env:   CT_COMMUNITY_NOTES_RSS must be set to the RSS feed URL.
 """
 
 import json

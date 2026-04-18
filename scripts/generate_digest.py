@@ -247,10 +247,19 @@ def main() -> None:
     digest = build_digest(plan_path, pairing_path)
     html = format_digest_html(digest)
 
-    Path("site/digest.json").write_text(
-        json.dumps(digest, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    Path("site/digest.html").write_text(html, encoding="utf-8")
+    json_path = Path("site/digest.json")
+    html_path = Path("site/digest.html")
+    try:
+        json_path.write_text(
+            json.dumps(digest, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        html_path.write_text(html, encoding="utf-8")
+    except OSError as e:
+        # Clean up partial writes so send_digest.py doesn't find stale files
+        json_path.unlink(missing_ok=True)
+        html_path.unlink(missing_ok=True)
+        print(f"ERROR: Failed to write digest files: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Digest generated for {digest['date']}")
 

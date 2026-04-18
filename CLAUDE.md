@@ -52,13 +52,15 @@ site/                         — Served by nginx (data + presentation + style s
   report.json                 — Inventory diff report (generated)
   digest.json                 — Morning digest data (generated, today's wine + pairings)
   digest.html                 — Morning digest email body (generated)
+  thisweek.json               — Current week's plan entry (generated, for HA integration)
+  today.json                  — Today's pairing entry (generated, for HA integration)
 scripts/
   plan_config.py              — Holidays + evolution tracks (gitignored, personal)
   plan_config.py.sample       — Template for plan_config.py
-  wine_utils.py               — Shared: CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score
-  scoring.py                  — Composite scoring: composite_score, window/seasonal/diversity/CT components
+  wine_utils.py               — Shared: CURRENT_YEAR, TYPE_TO_BADGE, normalize, urgency_score, call_claude, extract_json, find_current_week
+  scoring.py                  — Composite scoring: composite_score, window/seasonal/diversity/CT/community components
   generate_plan.py            — Deterministic plan generator (rules-based)
-  generate_notes.py           — Tasting notes (Claude CLI, augmented with CT notes/food tags)
+  generate_notes.py           — Tasting notes (Claude CLI, augmented with CT notes/food tags/community notes)
   wine_keywords.py            — Single source of truth for food keywords and pairing rules
   parse_inventory.py          — inventory.tsv → inventory.json
   parse_consumed.py           — consumed.tsv → consumed.json (consumption history)
@@ -70,6 +72,7 @@ scripts/
   compare.py                  — inventory.json + plan.json → report.json
   pairing.py                  — menu.json + plan.json + inventory.json → pairing_suggestions.json
   thisweek.py                 — Find current week's entry from plan.json (used by HA integration)
+  today.py                    — Find today's menu/pairing entry from plan.json (used by HA integration)
 tests/
   test_scoring.py             — Unit tests for all scoring components
   test_pairing_enriched.py    — Tests for enriched food-wine pairing
@@ -79,6 +82,7 @@ tests/
   test_parse_inventory.py     — Tests for inventory parsing
   test_generate_digest.py     — Tests for morning digest generation
   test_send_digest.py         — Tests for digest email sending
+  test_diff_plans.py          — Tests for plan diff/changelog logic
 docs/
   menu-guide.md               — How to write menu entries for best pairing results
 plans/                        — Design specs and algorithm proposals (gitignored)

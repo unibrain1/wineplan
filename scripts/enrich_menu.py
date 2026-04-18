@@ -4,7 +4,7 @@
 For each menu entry, extracts structured food features using Claude.
 Caches results keyed by raw text hash so unchanged entries aren't re-enriched.
 
-Usage: enrich_menu.py <menu.json> [menu_enriched.json]
+Usage: enrich_menu.py <menu.json> [cache.json] [output.json]
 """
 
 import hashlib

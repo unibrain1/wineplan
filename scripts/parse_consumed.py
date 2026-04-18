@@ -36,6 +36,7 @@ def parse_consumed(tsv_path: str | Path) -> list[dict]:
         records.append(record)
 
     # Sort by ConsumeDate descending (most recent first), nulls last
+    # Relies on ISO 8601 format (YYYY-MM-DD) for correct lexicographic sort
     records.sort(key=lambda r: r["ConsumeDate"] or "", reverse=True)
     return records
 

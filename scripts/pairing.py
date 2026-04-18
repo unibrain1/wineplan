@@ -75,14 +75,16 @@ def find_best_bottle(
     inventory: list[dict],
     planned_wines: dict[str, str] | None = None,
     exclude: set[str] | None = None,
+    prefer_styles: list[str] | None = None,
 ) -> dict | None:
     """Find the best bottle from inventory matching food keywords, using priority rules.
 
     planned_wines maps "vintage wine" keys to the week they're planned for.
     Planned bottles are still valid candidates — they can be moved forward.
+    prefer_styles provides pre-built style preferences (e.g. from enriched pairing).
     """
-    # Collect all preferred styles from matched keywords
-    all_preferred = []
+    # Collect all preferred styles from matched keywords + enriched suggestions
+    all_preferred = list(prefer_styles) if prefer_styles else []
     for kw in keywords:
         rule = PAIRING_RULES.get(kw)
         if rule:
@@ -357,6 +359,7 @@ def suggest_pairings(
                 inventory,
                 planned_wines,
                 already_suggested,
+                prefer_styles=pairing.get("suggested_styles"),
             )
             if suggestion:
                 result["suggested_bottle"] = suggestion
