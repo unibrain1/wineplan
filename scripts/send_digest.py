@@ -13,28 +13,35 @@ import json
 import os
 import smtplib
 import sys
-from datetime import date
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 STATE_FILE = Path("data/digest_last_sent.txt")
 DIGEST_JSON = Path("site/digest.json")
 DIGEST_HTML = Path("site/digest.html")
+LOCAL_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def _today_local() -> str:
+    """Return today's date in Pacific time as ISO string."""
+    return datetime.now(LOCAL_TZ).date().isoformat()
 
 
 def already_sent_today() -> bool:
-    """Check if digest was already sent today."""
+    """Check if digest was already sent today (Pacific time)."""
     if not STATE_FILE.exists():
         return False
     last_sent = STATE_FILE.read_text().strip()
-    return last_sent == date.today().isoformat()
+    return last_sent == _today_local()
 
 
 def mark_sent() -> None:
-    """Record that digest was sent today."""
+    """Record that digest was sent today (Pacific time)."""
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(date.today().isoformat())
+    STATE_FILE.write_text(_today_local())
 
 
 def build_email(
@@ -76,7 +83,20 @@ def main() -> None:
         sys.exit(1)
 
     digest = json.loads(DIGEST_JSON.read_text(encoding="utf-8"))
-    html_body = DIGEST_HTML.read_text(encoding="utf-8") if DIGEST_HTML.exists() else ""
+
+    if not DIGEST_HTML.exists():
+        print("ERROR: site/digest.html not found", file=sys.stderr)
+        sys.exit(1)
+    html_body = DIGEST_HTML.read_text(encoding="utf-8")
+
+    # Check if digest is for today (guard against stale data from failed pipeline)
+    today_str = _today_local()
+    if digest.get("date") != today_str and not force:
+        print(
+            f"Digest is for {digest.get('date')}, not today ({today_str}). "
+            "Use --force to override."
+        )
+        return
 
     # Check if there's content worth sending
     if not digest.get("has_content") and not force:
@@ -85,10 +105,7 @@ def main() -> None:
 
     # Idempotency check
     if already_sent_today() and not force:
-        print(
-            f"Digest already sent today ({date.today().isoformat()}). "
-            "Use --force to resend."
-        )
+        print(f"Digest already sent today ({today_str}). Use --force to resend.")
         return
 
     # Resolve SMTP credentials
@@ -118,7 +135,7 @@ def main() -> None:
 
     try:
         send_email(msg, smtp_username, smtp_password)
-    except Exception as e:
+    except smtplib.SMTPException as e:
         print(f"ERROR: Failed to send digest email: {e}", file=sys.stderr)
         sys.exit(1)
 

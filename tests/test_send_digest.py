@@ -43,26 +43,23 @@ class TestIdempotency:
         assert already_sent_today() is False
 
     def test_sent_today_returns_true(self, tmp_path, monkeypatch):
-        from datetime import date
-
+        monkeypatch.setattr("send_digest._today_local", lambda: "2026-04-18")
         state = tmp_path / "state.txt"
-        state.write_text(date.today().isoformat())
+        state.write_text("2026-04-18")
         monkeypatch.setattr("send_digest.STATE_FILE", state)
         assert already_sent_today() is True
 
     def test_sent_yesterday_returns_false(self, tmp_path, monkeypatch):
-        from datetime import date, timedelta
-
+        monkeypatch.setattr("send_digest._today_local", lambda: "2026-04-18")
         state = tmp_path / "state.txt"
-        state.write_text((date.today() - timedelta(days=1)).isoformat())
+        state.write_text("2026-04-17")
         monkeypatch.setattr("send_digest.STATE_FILE", state)
         assert already_sent_today() is False
 
     def test_mark_sent_creates_file(self, tmp_path, monkeypatch):
-        from datetime import date
-
+        monkeypatch.setattr("send_digest._today_local", lambda: "2026-04-18")
         state = tmp_path / "state.txt"
         monkeypatch.setattr("send_digest.STATE_FILE", state)
         mark_sent()
         assert state.exists()
-        assert state.read_text() == date.today().isoformat()
+        assert state.read_text() == "2026-04-18"
