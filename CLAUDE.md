@@ -127,7 +127,7 @@ Tests require `pytest` (install via `pip install pytest`). The `conftest.py` at 
 
 ```bash
 ruff check scripts/ && ruff format --check scripts/  # check only
-ruff format scripts/                                   # auto-fix
+ruff check --fix scripts/ && ruff format scripts/    # auto-fix lint + formatting
 ```
 
 ## Docker Deployment

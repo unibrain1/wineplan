@@ -16,6 +16,12 @@ description: Start work on a GitHub issue within a milestone workflow
 | Senior Test Engineer | `senior-test-engineer` | `sonnet` | Test strategy and writing |
 | Technical Documentation Writer | `technical-documentation-writer` | `haiku` | Docs updates |
 
+> **Note:** Only `Explore`, `Plan`, `pipeline-reviewer`, and `site-reviewer` are
+> defined locally in `.claude/agents/`. The role-based agents above
+> (`software-developer`, `senior-architect`, etc.) come from an installed agent
+> plugin. If they are unavailable, fall back to the generic `Agent` tool with a
+> role-specific prompt.
+
 **Always invoke:** Explore (Step 5), senior-product-manager (Step 6), senior-architect (Step 7.3).
 **Always invoke for code changes:** software-developer, senior-test-engineer.
 **Skip** docs agent for internal refactoring; test agent for docs-only changes.
@@ -35,7 +41,8 @@ gh issue view ISSUE_NUMBER --json number,title,body,milestone,labels
 1. `git branch --show-current` — must match `milestone/*`
    - Zero milestone branches: stop, tell user to run `/start-milestone` first
    - Multiple: stop, ask which one
-2. **Branch naming** — `bug/` for bug label, `feature/` for enhancement, `issue/` for all others. Confirm name with user before creating.
+2. **Ensure clean working tree** — run `git status --porcelain`. If any output appears, stop and ask the user to commit or stash before proceeding.
+3. **Branch naming** — `bug/` for bug label, `feature/` for enhancement, `issue/` for all others. Confirm name with user before creating.
 
 ### Step 4: Create Issue Branch
 
@@ -101,11 +108,10 @@ Use EnterPlanMode. While planning:
 ```text
 Implementation complete for issue #ISSUE_NUMBER. Next steps:
 1. /simplify        — Review changed code (optional)
-2. /review-pr       — Multi-agent local review (recommended before push)
-3. /commit          — Commit your changes
-4. /commit-push-pr  — Push and create a PR targeting `MILESTONE_BRANCH`
-                      Include "Closes #ISSUE_NUMBER" in the PR body.
-5. /finish-issue    — Squash-merge, close the issue, return to milestone branch
+2. /security-review — Audit changes before push
+3. Commit your changes manually (`git commit`) and push the branch.
+   Open a PR targeting `MILESTONE_BRANCH` and include "Closes #ISSUE_NUMBER" in the body.
+4. /finish-issue    — Squash-merge, close the issue, return to milestone branch
 ```
 
 > Do NOT run any of these steps automatically.

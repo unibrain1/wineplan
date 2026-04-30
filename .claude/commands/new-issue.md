@@ -38,6 +38,12 @@ Wait for confirmation before proceeding.
 
 ### Step 3: PM-Driven Scope Definition
 
+> **Note:** The role-based agents below (`senior-product-manager`,
+> `senior-architect`, `senior-test-engineer`, `technical-documentation-writer`)
+> come from an installed agent plugin and are not defined locally in
+> `.claude/agents/`. If they are unavailable, fall back to the generic `Agent`
+> tool with a role-specific prompt.
+
 Launch the **senior-product-manager** agent with:
 
 - The user's problem statement
@@ -120,10 +126,15 @@ create a separate issue for it?"
 
 ### Step 7: Create the Issue
 
-Once the user approves, create the issue on GitHub:
+Once the user approves, create the issue on GitHub. Pass each approved label
+with a separate `--label` flag, and include `--milestone` if one was selected:
 
 ```bash
-gh issue create --title "Issue title" --body "$(cat <<'EOF'
+gh issue create \
+  --title "Issue title" \
+  --label "LABEL_1" --label "LABEL_2" \
+  --milestone "MILESTONE_NAME" \
+  --body "$(cat <<'EOF'
 ## Problem
 
 Description of the problem or need.
@@ -152,6 +163,9 @@ High-level approach.
 EOF
 )"
 ```
+
+Omit `--milestone` if none was chosen, and omit `--label` flags if no labels
+were approved.
 
 After creation, display the issue URL and number.
 

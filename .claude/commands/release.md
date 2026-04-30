@@ -90,12 +90,15 @@ When the user runs `/release`, execute this comprehensive release workflow:
    - Major technical changes
    - Test coverage changes
 
-3. **Present to User for Review**
-   - Show the generated release notes in the conversation
+3. **Save and Present to User for Review**
+   - Write the generated notes to `RELEASE_NOTES.md` at the repo root.
+   - Show the generated release notes in the conversation.
    - Ask: "Review the release notes above. Reply with 'approve' to continue,
      'edit' to modify, or provide specific changes."
-   - If user says 'edit', open in VS Code with: `code --wait [file]`
-   - Wait for user approval
+   - If the user says 'edit', open `RELEASE_NOTES.md` in their editor
+     (try `${EDITOR:-code} --wait RELEASE_NOTES.md`; fall back to instructing
+     the user to edit the file manually if no editor is available).
+   - Wait for user approval.
 
 ## Phase 3: Execute Release
 
@@ -143,10 +146,14 @@ When the user runs `/release`, execute this comprehensive release workflow:
 
 5. **Create GitHub Release**
 
+   Use the curated `RELEASE_NOTES.md` produced in Phase 2 — do **not** pass
+   `--generate-notes`, which would discard them in favor of GitHub's
+   auto-generated commit summary.
+
    ```bash
    gh release create v[VERSION] \
      --title "The Sommelier v[VERSION]" \
-     --generate-notes
+     --notes-file RELEASE_NOTES.md
    ```
 
 6. **Provide Deployment Instructions**
