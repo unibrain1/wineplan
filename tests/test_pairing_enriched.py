@@ -103,6 +103,32 @@ class TestScoreEnrichedPairing:
         assert "suggested_styles" in result
         assert len(result["suggested_styles"]) > 0
 
+    def test_list_valued_protein_does_not_crash(self):
+        # The LLM occasionally returns a list for a scalar field when the dish
+        # has multiple proteins. Must not raise TypeError on dict membership.
+        enriched = {"protein": ["salmon", "shrimp"]}
+        result = score_enriched_pairing("pinot noir", enriched)
+        assert result is not None
+        assert result["score"] == "good"
+
+    def test_list_valued_protein_first_known_wins(self):
+        # Unknown leading entries are skipped; first known key drives scoring.
+        enriched = {"protein": ["unknownfish", "beef"]}
+        result = score_enriched_pairing("cabernet sauvignon", enriched)
+        assert result is not None
+        assert result["score"] == "good"
+
+    def test_list_valued_cuisine_does_not_crash(self):
+        enriched = {"cuisine": ["italian", "american"], "richness": "medium"}
+        result = score_enriched_pairing("sangiovese chianti", enriched)
+        assert result is not None
+
+    def test_list_with_no_known_keys_skipped(self):
+        # A list of unrecognized values should produce no signal, not crash.
+        enriched = {"protein": ["unobtanium"]}
+        result = score_enriched_pairing("any wine", enriched)
+        assert result is None
+
 
 class TestBuildEnrichedIndex:
     def test_builds_index_from_enriched_list(self):
